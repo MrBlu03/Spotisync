@@ -1,0 +1,794 @@
+class SpotisyncApp {
+    constructor() {
+        this.currentPreview = null;
+        this.selectedTracks = new Set();
+        this.init();
+    }
+
+    init() {
+        this.setupEventListeners();
+        this.checkAuthStatus();
+        this.checkUrlParams();
+    }
+
+    setupEventListeners() {        // Authentication
+        document.getElementById('spotify-auth-btn').addEventListener('click', () => {
+            this.authenticateSpotify();
+        });
+
+        document.getElementById('youtube-auth-btn').addEventListener('click', () => {
+            this.authenticateYoutube();
+        });        // Playlist selection
+        document.getElementById('spotify-playlist').addEventListener('change', (e) => {
+            this.handleSpotifyPlaylistChange(e.target.value);
+        });
+
+        document.getElementById('youtube-playlist').addEventListener('change', () => {
+            this.updatePreviewButton();
+        });
+
+        document.getElementById('new-playlist-name').addEventListener('input', () => {
+            this.updatePreviewButton();
+        });
+
+        // Preview sync
+        document.getElementById('preview-sync-btn').addEventListener('click', () => {
+            this.previewSync();
+        });
+
+        // Execute sync
+        document.getElementById('execute-sync-btn').addEventListener('click', () => {
+            this.executeSync();
+        });
+
+        // Navigation
+        document.getElementById('back-to-selection-btn').addEventListener('click', () => {
+            this.showSection('playlist-section');
+        });
+
+        document.getElementById('new-sync-btn').addEventListener('click', () => {
+            this.resetApp();
+        });
+
+        // Tabs
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.switchTab(e.target.dataset.tab);
+            });
+        });
+    }    checkUrlParams() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('auth') === 'success') {
+            this.showToast('Spotify authentication successful!', 'success');
+            this.checkAuthStatus();
+            // Clean up URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (urlParams.get('auth') === 'error') {
+            this.showToast('Spotify authentication failed. Please try again.', 'error');
+            // Clean up URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (urlParams.get('ytauth') === 'success') {
+            this.showToast('YouTube Music authentication successful!', 'success');
+            this.checkAuthStatus();
+            // Clean up URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (urlParams.get('ytauth') === 'error') {
+            this.showToast('YouTube Music authentication failed. Please try again.', 'error');
+            // Clean up URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    }    async checkAuthStatus() {
+        try {
+            // Check Spotify authentication
+            let spotifyResponse;
+            try {
+                spotifyResponse = await fetch('/api/spotify/playlists');
+                if (spotifyResponse.ok) {
+                    document.getElementById('spotify-status').textContent = 'Connected';
+                    document.getElementById('spotify-status').className = 'status-indicator status-connected';
+                    document.getElementById('spotify-auth-btn').style.display = 'none';
+                } else {
+                    document.getElementById('spotify-status').textContent = 'Not Connected';
+                    document.getElementById('spotify-status').className = 'status-indicator status-error';
+                }
+            } catch (error) {
+                console.error('Error checking Spotify auth:', error);
+                document.getElementById('spotify-status').textContent = 'Error';
+                document.getElementById('spotify-status').className = 'status-indicator status-error';
+                spotifyResponse = { ok: false };
+            }
+
+            // Check YouTube Music authentication
+            let youtubeResponse;
+            try {
+                youtubeResponse = await fetch('/api/youtube/playlists');
+                if (youtubeResponse.ok) {
+                    document.getElementById('youtube-status').textContent = 'Connected';
+                    document.getElementById('youtube-status').className = 'status-indicator status-connected';
+                    document.getElementById('youtube-auth-btn').style.display = 'none';
+                } else {
+                    document.getElementById('youtube-status').textContent = 'Not Connected';
+                    document.getElementById('youtube-status').className = 'status-indicator status-error';
+                }
+            } catch (error) {
+                console.error('Error checking YouTube auth:', error);
+                document.getElementById('youtube-status').textContent = 'Not Connected';
+                document.getElementById('youtube-status').className = 'status-indicator status-error';
+                youtubeResponse = { ok: false };
+            }
+
+            // Load playlists and show playlist section if both services are connected
+            if (spotifyResponse.ok && youtubeResponse.ok) {
+                await this.loadPlaylists();
+                this.showSection('playlist-section');
+            } else if (spotifyResponse.ok || youtubeResponse.ok) {
+                // If only one service is connected, still load playlists
+                await this.loadPlaylists();
+            }
+        } catch (error) {
+            console.error('Error checking auth status:', error);
+            document.getElementById('spotify-status').textContent = 'Error';
+            document.getElementById('spotify-status').className = 'status-indicator status-error';
+            document.getElementById('youtube-status').textContent = 'Error';
+            document.getElementById('youtube-status').className = 'status-indicator status-error';
+        }
+    }authenticateSpotify() {
+        window.location.href = '/auth/spotify';
+    }
+
+    authenticateYoutube() {
+        window.location.href = '/auth/youtube';
+    }    async loadPlaylists() {
+        try {
+            this.showLoading('Loading playlists...');
+
+            // Try to load Spotify playlists
+            try {
+                const spotifyResponse = await fetch('/api/spotify/playlists');
+                if (spotifyResponse.ok) {
+                    const spotifyPlaylists = await spotifyResponse.json();
+                    this.populatePlaylistSelect('spotify-playlist', spotifyPlaylists);
+                } else {
+                    console.log('Spotify playlists not available - user not authenticated');
+                }
+            } catch (error) {
+                console.error('Error loading Spotify playlists:', error);
+            }
+
+            // Try to load YouTube playlists
+            try {
+                const youtubeResponse = await fetch('/api/youtube/playlists');
+                if (youtubeResponse.ok) {
+                    const youtubePlaylists = await youtubeResponse.json();
+                    this.populatePlaylistSelect('youtube-playlist', youtubePlaylists);
+                } else {
+                    console.log('YouTube Music playlists not available - user not authenticated or API not enabled');
+                }
+            } catch (error) {
+                console.error('Error loading YouTube playlists:', error);
+                this.showToast('YouTube Music setup required. Please check documentation.', 'warning');
+            }
+
+            // Update preview button state after loading playlists
+            this.updatePreviewButton();
+            this.hideLoading();
+        } catch (error) {
+            console.error('Error loading playlists:', error);
+            this.showToast('Error loading playlists', 'error');
+            this.hideLoading();
+        }
+    }
+
+    populatePlaylistSelect(selectId, playlists) {
+        const select = document.getElementById(selectId);
+        
+        // Clear existing options (except the first one and "new" option for Spotify)
+        while (select.children.length > (selectId === 'spotify-playlist' ? 2 : 1)) {
+            select.removeChild(select.lastChild);
+        }
+
+        playlists.forEach(playlist => {
+            const option = document.createElement('option');
+            option.value = playlist.id;
+            option.textContent = `${playlist.name} (${playlist.trackCount} tracks)`;
+            select.appendChild(option);
+        });
+    }
+
+    handleSpotifyPlaylistChange(value) {
+        const newPlaylistInput = document.getElementById('new-playlist-name');
+        if (value === 'new') {
+            newPlaylistInput.style.display = 'block';
+            newPlaylistInput.focus();
+        } else {
+            newPlaylistInput.style.display = 'none';
+        }
+        this.updatePreviewButton();
+    }    updatePreviewButton() {
+        const youtubeSelect = document.getElementById('youtube-playlist');
+        const spotifySelect = document.getElementById('spotify-playlist');
+        const newPlaylistInput = document.getElementById('new-playlist-name');
+        const previewBtn = document.getElementById('preview-sync-btn');
+        
+        if (!youtubeSelect || !spotifySelect || !previewBtn) {
+            return; // Elements not ready yet
+        }
+        
+        const youtubePlaylist = youtubeSelect.value;
+        const spotifyPlaylist = spotifySelect.value;
+        const newPlaylistName = newPlaylistInput ? newPlaylistInput.value : '';
+        
+        const canPreview = youtubePlaylist && (spotifyPlaylist !== '' && 
+            (spotifyPlaylist !== 'new' || newPlaylistName.trim()));
+        
+        previewBtn.disabled = !canPreview;
+    }    async previewSync() {
+        try {
+            const youtubePlaylistId = document.getElementById('youtube-playlist').value;
+            const spotifyPlaylistId = document.getElementById('spotify-playlist').value === 'new' 
+                ? null 
+                : document.getElementById('spotify-playlist').value;
+
+            this.showProgressLoading('Generating preview...', 0);
+
+            // Use regular API endpoint for preview
+            const response = await fetch('/api/sync/preview', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    youtubePlaylistId,
+                    spotifyPlaylistId
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to generate preview');
+            }
+            
+            // Process the JSON response directly
+            const previewData = await response.json();
+            
+            // Update the UI with the preview data
+            this.currentPreview = previewData;
+            this.displayPreview();
+            this.showSection('preview-section');
+            this.hideLoading();
+
+        } catch (error) {
+            console.error('Error previewing sync:', error);
+            this.showToast('Error generating preview: ' + error.message, 'error');
+            this.hideLoading();
+        }
+    }
+
+    displayPreview() {
+        if (!this.currentPreview) return;
+
+        // Update stats
+        this.displaySyncStats();
+        
+        // Update tab counts
+        document.getElementById('perfect-count').textContent = this.currentPreview.summary.perfectMatchCount;
+        document.getElementById('uncertain-count').textContent = this.currentPreview.summary.uncertainMatchCount;
+        document.getElementById('duplicate-count').textContent = this.currentPreview.summary.duplicateCount;
+        document.getElementById('no-match-count').textContent = this.currentPreview.summary.noMatchCount;
+
+        // Display track lists
+        this.displayTrackList('perfect-matches', this.currentPreview.perfectMatches, 'perfect');
+        this.displayTrackList('uncertain-matches', this.currentPreview.uncertainMatches, 'uncertain');
+        this.displayTrackList('duplicate-matches', this.currentPreview.duplicates, 'duplicate');
+        this.displayTrackList('no-matches', this.currentPreview.noMatches, 'no-match');
+
+        // Pre-select all perfect matches
+        this.currentPreview.perfectMatches.forEach((match, index) => {
+            this.selectedTracks.add(`perfect-${index}`);
+        });
+
+        this.updateExecuteButton();
+    }
+
+    displaySyncStats() {
+        const stats = this.currentPreview.summary;
+        const syncablePercentage = Math.round((stats.perfectMatchCount / stats.totalYoutubeTracks) * 100);
+
+        document.getElementById('sync-stats').innerHTML = `
+            <div class="stat-card stat-perfect">
+                <div class="stat-number">${stats.perfectMatchCount}</div>
+                <div class="stat-label">Perfect Matches</div>
+            </div>
+            <div class="stat-card stat-uncertain">
+                <div class="stat-number">${stats.uncertainMatchCount}</div>
+                <div class="stat-label">Need Review</div>
+            </div>
+            <div class="stat-card stat-duplicate">
+                <div class="stat-number">${stats.duplicateCount}</div>
+                <div class="stat-label">Duplicates</div>
+            </div>
+            <div class="stat-card stat-missing">
+                <div class="stat-number">${stats.noMatchCount}</div>
+                <div class="stat-label">Not Found</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${syncablePercentage}%</div>
+                <div class="stat-label">Ready to Sync</div>
+            </div>
+        `;
+    }
+
+    displayTrackList(containerId, tracks, type) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+
+        if (tracks.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #718096; padding: 20px;">No tracks in this category</p>';
+            return;
+        }
+
+        tracks.forEach((track, index) => {
+            const trackElement = this.createTrackElement(track, type, index);
+            container.appendChild(trackElement);
+        });
+    }
+
+    createTrackElement(track, type, index) {
+        const div = document.createElement('div');
+        div.className = 'track-item';
+        div.dataset.type = type;
+        div.dataset.index = index;
+
+        const trackId = `${type}-${index}`;
+
+        let content = '';
+        let actions = '';
+
+        if (type === 'perfect') {
+            content = `
+                <div class="track-info">
+                    <div class="track-title">${track.youtubeTrack.title}</div>
+                    <div class="track-artist">by ${track.youtubeTrack.artist}</div>
+                </div>
+                <div class="track-confidence confidence-perfect">Perfect Match</div>
+            `;
+            actions = `
+                <input type="checkbox" id="${trackId}" class="track-checkbox" checked>
+                <label for="${trackId}">Include in sync</label>
+            `;
+        } else if (type === 'uncertain') {
+            const matches = track.spotifyMatches || [];
+            const matchesHtml = matches.map(match => 
+                `<div style="margin-left: 20px; color: #718096; font-size: 0.9rem;">
+                    → ${match.name} by ${match.artists.join(', ')} 
+                    <span class="track-confidence confidence-${match.confidence}">${match.confidence}</span>
+                </div>`
+            ).join('');
+
+            content = `
+                <div class="track-info">
+                    <div class="track-title">${track.youtubeTrack.title}</div>
+                    <div class="track-artist">by ${track.youtubeTrack.artist}</div>
+                    <div style="margin-top: 8px; font-size: 0.9rem; color: #ed8936;">${track.reason}</div>
+                    ${matchesHtml}
+                </div>
+            `;
+            actions = `
+                <button class="action-btn action-approve" onclick="spotisyncApp.approveUncertainTrack('${trackId}')">
+                    Approve Best Match
+                </button>
+            `;
+        } else if (type === 'duplicate') {
+            content = `
+                <div class="track-info">
+                    <div class="track-title">${track.youtubeTrack.title}</div>
+                    <div class="track-artist">by ${track.youtubeTrack.artist}</div>
+                    <div style="margin-top: 8px; font-size: 0.9rem; color: #4299e1;">${track.reason}</div>
+                </div>
+                <div class="track-confidence confidence-perfect">Already in Playlist</div>
+            `;
+        } else if (type === 'no-match') {
+            content = `
+                <div class="track-info">
+                    <div class="track-title">${track.youtubeTrack.title}</div>
+                    <div class="track-artist">by ${track.youtubeTrack.artist}</div>
+                    <div style="margin-top: 8px; font-size: 0.9rem; color: #f56565;">${track.reason}</div>
+                </div>
+                <div class="track-confidence confidence-poor">Not Found</div>
+            `;
+        }
+
+        div.innerHTML = content + (actions ? `<div class="track-actions">${actions}</div>` : '');
+
+        // Add event listener for checkbox changes
+        if (type === 'perfect') {
+            const checkbox = div.querySelector('.track-checkbox');
+            checkbox.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    this.selectedTracks.add(trackId);
+                } else {
+                    this.selectedTracks.delete(trackId);
+                }
+                this.updateExecuteButton();
+            });
+        }
+
+        return div;
+    }
+
+    approveUncertainTrack(trackId) {
+        const [type, index] = trackId.split('-');
+        const track = this.currentPreview.uncertainMatches[parseInt(index)];
+        
+        if (track.spotifyMatches && track.spotifyMatches.length > 0) {
+            // Add the best match to selected tracks
+            this.selectedTracks.add(trackId);
+            
+            // Update UI to show it's approved
+            const trackElement = document.querySelector(`[data-type="${type}"][data-index="${index}"]`);
+            const button = trackElement.querySelector('.action-approve');
+            button.textContent = 'Approved';
+            button.className = 'action-btn action-approved';
+            button.style.background = '#48bb78';
+            button.disabled = true;
+            
+            this.updateExecuteButton();
+            this.showToast('Track approved for sync', 'success');
+        }
+    }
+
+    updateExecuteButton() {
+        const selectedCount = this.selectedTracks.size;
+        const executeBtn = document.getElementById('execute-sync-btn');
+        executeBtn.disabled = selectedCount === 0;
+        executeBtn.innerHTML = `<i class="fas fa-play"></i> Execute Sync (${selectedCount} tracks)`;
+    }
+
+    async executeSync() {
+        try {
+            const youtubePlaylistId = document.getElementById('youtube-playlist').value;
+            let spotifyPlaylistId = document.getElementById('spotify-playlist').value;
+            const createNewPlaylist = spotifyPlaylistId === 'new';
+            const newPlaylistName = document.getElementById('new-playlist-name').value;
+
+            // Prepare approved tracks
+            const approvedTracks = [];
+            
+            this.selectedTracks.forEach(trackId => {
+                const [type, index] = trackId.split('-');
+                const trackIndex = parseInt(index);
+                
+                if (type === 'perfect') {
+                    approvedTracks.push(this.currentPreview.perfectMatches[trackIndex]);
+                } else if (type === 'uncertain') {
+                    const uncertainTrack = this.currentPreview.uncertainMatches[trackIndex];
+                    if (uncertainTrack.spotifyMatches && uncertainTrack.spotifyMatches.length > 0) {
+                        approvedTracks.push({
+                            youtubeTrack: uncertainTrack.youtubeTrack,
+                            spotifyTrack: uncertainTrack.spotifyMatches[0] // Use best match
+                        });
+                    }
+                }
+            });
+
+            this.showLoading(`Syncing ${approvedTracks.length} tracks...`);            const response = await fetch('/api/sync/execute', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    youtubePlaylistId,
+                    spotifyPlaylistId: createNewPlaylist ? null : spotifyPlaylistId,
+                    approvedTracks,
+                    createNewPlaylist,
+                    newPlaylistName,
+                    previewResults: this.currentPreview // Pass the preview results to track non-transferred tracks
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to execute sync');
+            }
+
+            const results = await response.json();
+            this.displayResults(results);
+            this.showSection('results-section');
+            this.hideLoading();
+
+        } catch (error) {
+            console.error('Error executing sync:', error);
+            this.showToast('Error executing sync: ' + error.message, 'error');
+            this.hideLoading();
+        }
+    }    displayResults(results) {
+        const container = document.getElementById('sync-results');
+        
+        const successRate = results.summary.totalApproved > 0 
+            ? Math.round((results.summary.successfullyAdded / results.summary.totalApproved) * 100)
+            : 0;
+            
+        // Calculate total non-transferred tracks count
+        const nonTransferredCount = results.summary.nonTransferredCount || 0;
+        const hasNonTransferred = nonTransferredCount > 0;
+
+        container.innerHTML = `
+            <div class="sync-stats">
+                <div class="stat-card stat-perfect">
+                    <div class="stat-number">${results.summary.successfullyAdded}</div>
+                    <div class="stat-label">Tracks Added</div>
+                </div>
+                <div class="stat-card stat-uncertain">
+                    <div class="stat-number">${results.summary.failed}</div>
+                    <div class="stat-label">Failed</div>
+                </div>
+                ${hasNonTransferred ? `
+                <div class="stat-card stat-missing">
+                    <div class="stat-number">${nonTransferredCount}</div>
+                    <div class="stat-label">Not Transferred</div>
+                </div>
+                ` : ''}
+                <div class="stat-card">
+                    <div class="stat-number">${successRate}%</div>
+                    <div class="stat-label">Success Rate</div>
+                </div>
+            </div>
+            
+            ${results.summary.successfullyAdded > 0 ? `
+                <div style="margin-top: 24px;">
+                    <h3 style="color: #48bb78; margin-bottom: 12px;">✅ Successfully Added Tracks</h3>
+                    <div class="track-list" style="max-height: 200px;">
+                        ${results.tracksAdded.map(track => `
+                            <div class="track-item">
+                                <div class="track-info">
+                                    <div class="track-title">${track.spotifyTrack.name}</div>
+                                    <div class="track-artist">by ${track.spotifyTrack.artists.join(', ')}</div>
+                                </div>
+                                <div class="track-confidence confidence-perfect">Added</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+            
+            ${results.tracksFailed.length > 0 ? `
+                <div style="margin-top: 24px;">
+                    <h3 style="color: #f56565; margin-bottom: 12px;">❌ Failed Tracks</h3>
+                    <div style="background: #fed7d7; padding: 16px; border-radius: 8px; color: #742a2a;">
+                        ${results.tracksFailed.map(failure => failure.error).join('<br>')}
+                    </div>
+                </div>
+            ` : ''}
+            
+            <!-- Display non-transferred tracks -->
+            ${results.nonTransferred ? `
+                <!-- Display unmatched tracks -->
+                ${results.nonTransferred.unmatchedTracks && results.nonTransferred.unmatchedTracks.length > 0 ? `
+                    <div style="margin-top: 24px;">
+                        <h3 style="color: #ed8936; margin-bottom: 12px;">⚠️ Unmatched Tracks</h3>
+                        <div class="track-list track-list-non-transferred">
+                            ${results.nonTransferred.unmatchedTracks.map(track => `
+                                <div class="track-item">
+                                    <div class="track-info">
+                                        <div class="track-title">${track.youtubeTrack.title}</div>
+                                        <div class="track-artist">by ${track.youtubeTrack.artist}</div>
+                                        <div class="track-reason">${track.reason || 'No match found on Spotify'}</div>
+                                    </div>
+                                    <div class="track-confidence confidence-poor">Not Found</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Display unapproved tracks -->
+                ${results.nonTransferred.unapprovedTracks && results.nonTransferred.unapprovedTracks.length > 0 ? `
+                    <div style="margin-top: 24px;">
+                        <h3 style="color: #ed8936; margin-bottom: 12px;">⚠️ Unapproved Tracks</h3>
+                        <div class="track-list track-list-non-transferred">
+                            ${results.nonTransferred.unapprovedTracks.map(track => `
+                                <div class="track-item">
+                                    <div class="track-info">
+                                        <div class="track-title">${track.youtubeTrack.title}</div>
+                                        <div class="track-artist">by ${track.youtubeTrack.artist}</div>
+                                        <div class="track-reason">${track.reason || 'Track required manual approval'}</div>
+                                    </div>
+                                    <div class="track-confidence confidence-uncertain">Not Approved</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Display failed tracks -->
+                ${results.nonTransferred.failedTracks && results.nonTransferred.failedTracks.length > 0 ? `
+                    <div style="margin-top: 24px;">
+                        <h3 style="color: #f56565; margin-bottom: 12px;">❌ Failed to Transfer</h3>
+                        <div class="track-list track-list-non-transferred">
+                            ${results.nonTransferred.failedTracks.map(track => `
+                                <div class="track-item">
+                                    <div class="track-info">
+                                        <div class="track-title">${track.youtubeTrack?.title || track.title || 'Unknown Track'}</div>
+                                        <div class="track-artist">by ${track.youtubeTrack?.artist || track.artist || 'Unknown Artist'}</div>
+                                    </div>
+                                    <div class="track-confidence confidence-poor">Transfer Failed</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            ` : ''}
+        `;
+
+        if (results.summary.successfullyAdded > 0) {
+            this.showToast(`Successfully synced ${results.summary.successfullyAdded} tracks!`, 'success');
+        }
+    }
+
+    switchTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+        // Update tab content
+        document.querySelectorAll('.tab-pane').forEach(pane => {
+            pane.classList.remove('active');
+        });
+        document.getElementById(`${tabName}-tab`).classList.add('active');
+    }
+
+    showSection(sectionId) {
+        document.querySelectorAll('.card').forEach(card => {
+            card.style.display = 'none';
+        });
+        document.getElementById(sectionId).style.display = 'block';
+    }    showLoading(message) {
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingContent = loadingOverlay.querySelector('.loading-content');
+        
+        // Simple loading without progress tracking
+        loadingContent.innerHTML = `
+            <div class="spinner"></div>
+            <p id="loading-message">${message}</p>
+        `;
+        
+        loadingOverlay.style.display = 'flex';
+    }showProgressLoading(message, percentage = 0) {
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingContent = loadingOverlay.querySelector('.loading-content');
+        
+        // Update loading content structure for better progress display
+        loadingContent.innerHTML = `
+            <div class="loading-header">
+                <div class="loading-title">Processing Your Playlist</div>
+                <div class="loading-subtitle">Analyzing tracks and finding matches...</div>
+            </div>
+            <div class="spinner"></div>
+            <div id="progress-container" class="progress-container active">
+                <div class="progress-message">${message}</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${percentage}%"></div>
+                </div>
+                <div class="progress-percentage">${percentage}%</div>
+                <div class="progress-stats">
+                    <div class="progress-stat">
+                        <div class="progress-stat-number" id="processed-count">0</div>
+                        <div class="progress-stat-label">Processed</div>
+                    </div>
+                    <div class="progress-stat">
+                        <div class="progress-stat-number" id="total-count">0</div>
+                        <div class="progress-stat-label">Total</div>
+                    </div>
+                    <div class="progress-stat">
+                        <div class="progress-stat-number" id="matches-count">0</div>
+                        <div class="progress-stat-label">Matches</div>
+                    </div>
+                    <div class="progress-stat">
+                        <div class="progress-stat-number" id="duplicates-count">0</div>
+                        <div class="progress-stat-label">Duplicates</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        loadingOverlay.style.display = 'flex';
+    }
+
+    updateProgress(data) {
+        if (data.phase && data.message && typeof data.percentage === 'number') {
+            this.updateProgressDisplay(data.message, data.percentage, data);
+        }
+    }    updateProgressDisplay(message, percentage, data = {}) {
+        const progressContainer = document.getElementById('progress-container');
+        if (progressContainer) {
+            // Update main progress elements
+            const progressMessage = progressContainer.querySelector('.progress-message');
+            const progressFill = progressContainer.querySelector('.progress-fill');
+            const progressPercentage = progressContainer.querySelector('.progress-percentage');
+            
+            if (progressMessage) progressMessage.textContent = message;
+            if (progressFill) progressFill.style.width = `${percentage}%`;
+            if (progressPercentage) progressPercentage.textContent = `${Math.round(percentage)}%`;
+            
+            // Update stats if provided
+            if (data.stats) {
+                const processedCount = document.getElementById('processed-count');
+                const totalCount = document.getElementById('total-count');
+                const matchesCount = document.getElementById('matches-count');
+                const duplicatesCount = document.getElementById('duplicates-count');
+                
+                if (processedCount) processedCount.textContent = data.stats.processed || 0;
+                if (totalCount) totalCount.textContent = data.stats.total || 0;
+                if (matchesCount) matchesCount.textContent = data.stats.matches || 0;
+                if (duplicatesCount) duplicatesCount.textContent = data.stats.duplicates || 0;
+            }
+            
+            // Update phase-specific styling
+            if (data.phase) {
+                const loadingSubtitle = document.querySelector('.loading-subtitle');
+                if (loadingSubtitle) {
+                    switch (data.phase) {
+                        case 'fetching':
+                            loadingSubtitle.textContent = 'Fetching tracks from YouTube Music...';
+                            break;
+                        case 'analyzing':
+                            loadingSubtitle.textContent = 'Analyzing tracks and finding matches...';
+                            break;
+                        case 'matching':
+                            loadingSubtitle.textContent = 'Searching Spotify for track matches...';
+                            break;
+                        case 'finalizing':
+                            loadingSubtitle.textContent = 'Finalizing results and preparing preview...';
+                            break;
+                        default:
+                            loadingSubtitle.textContent = 'Processing your playlist...';
+                    }
+                }
+            }
+        }
+    }    hideLoading() {
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const progressContainer = document.getElementById('progress-container');
+        
+        // Remove active animation class
+        if (progressContainer) {
+            progressContainer.classList.remove('active');
+        }
+        
+        loadingOverlay.style.display = 'none';
+    }
+
+    showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+
+        document.getElementById('toast-container').appendChild(toast);
+
+        setTimeout(() => {
+            toast.remove();
+        }, 5000);
+    }
+
+    resetApp() {
+        this.currentPreview = null;
+        this.selectedTracks.clear();
+        
+        // Reset form fields
+        document.getElementById('youtube-playlist').value = '';
+        document.getElementById('spotify-playlist').value = '';
+        document.getElementById('new-playlist-name').value = '';
+        document.getElementById('new-playlist-name').style.display = 'none';
+        
+        // Reset button states
+        this.updatePreviewButton();
+        
+        // Show playlist selection
+        this.showSection('playlist-section');
+    }
+}
+
+// Initialize the app when the DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    window.spotisyncApp = new SpotisyncApp();
+});
