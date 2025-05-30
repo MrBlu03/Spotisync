@@ -1,146 +1,219 @@
-# Spotisync Setup Guide
+# Setup Guide for Spotisync
 
-This guide will help you set up Spotisync to sync your YouTube Music playlists to Spotify.
+This guide will walk you through setting up Spotisync to sync your Spotify playlists to YouTube Music using header-based authentication.
 
-## Prerequisites
+## 🚀 Quick Setup (Recommended)
 
-- Node.js (version 14 or higher)
-- A Spotify account
-- A YouTube Music account (or YouTube account with music playlists)
+For the fastest setup experience, use our interactive setup script:
 
-## Step 1: Spotify Developer Setup
+```bash
+npm run setup
+```
 
-**⚠️ Important**: As of April 2025, Spotify requires specific redirect URI formats. You must use `127.0.0.1` instead of `localhost` for local development.
+This script will automatically:
+- Check prerequisites (Node.js and Python)
+- Install all dependencies
+- Guide you through Spotify app configuration
+- Help you extract YouTube Music headers
+- Generate authentication files
+- Start the application
 
-1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Log in with your Spotify account
-3. Click "Create App"
-4. Fill in the app details:
-   - **App Name**: Spotisync (or any name you prefer)
-   - **App Description**: Personal playlist sync tool
-   - **Website**: http://127.0.0.1:3000 (for development)
-   - **Redirect URI**: http://127.0.0.1:3000/callback
-5. Check the boxes for the terms of service
-6. Click "Save"
-7. In your new app, note down:
-   - **Client ID**
-   - **Client Secret** (click "Show Client Secret")
+**Skip to [Manual Setup](#manual-setup) if you prefer to configure everything yourself.**
 
-## Step 2: Configure Environment Variables
+---
 
-1. In the Spotisync folder, copy `.env.example` to `.env`
-2. Open the `.env` file and replace the placeholder values:   ```env
-   SPOTIFY_CLIENT_ID=your_actual_client_id
-   SPOTIFY_CLIENT_SECRET=your_actual_client_secret
-   SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/callback
+## 📋 Prerequisites
+
+Before you begin, ensure you have:
+
+- **Node.js** (version 14 or higher) - [Download here](https://nodejs.org/)
+- **npm** (comes with Node.js) or **yarn**
+- **Python** (for YouTube Music authentication setup) - [Download here](https://python.org/)
+- **Spotify account** with playlists you want to sync
+- **YouTube Music account** (free or premium)
+
+## 🔧 Manual Setup
+
+### Step 1: Clone and Install
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd Spotisync
+   ```
+
+2. **Install Node.js dependencies**
+   ```bash
+   npm install
+   ```
+
+### Step 2: Spotify API Setup
+
+1. **Go to Spotify Developer Dashboard**
+   - Visit [https://developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
+   - Log in with your Spotify account
+
+2. **Create a new app**
+   - Click "Create an App"
+   - Fill in the app name (e.g., "Spotisync")
+   - Add a description
+   - Accept the terms and create
+
+3. **Configure the app**
+   - In your new app, click "Edit Settings"
+   - Add this redirect URI: `http://localhost:3000/callback`
+   - Save the settings
+
+4. **Get your credentials**
+   - Copy the **Client ID** and **Client Secret**
+   - Keep these secure - you'll need them in the next step
+
+### Step 3: Environment Configuration
+
+1. **Create environment file**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Edit the .env file**
+   Open `.env` in a text editor and add your Spotify credentials:
+   ```env
+   SPOTIFY_CLIENT_ID=your_client_id_here
+   SPOTIFY_CLIENT_SECRET=your_client_secret_here
+   SPOTIFY_REDIRECT_URI=http://localhost:3000/callback
    PORT=3000
    ```
 
-## Step 3: Install Dependencies
+### Step 4: YouTube Music Authentication Setup
 
-Open a terminal in the Spotisync folder and run:
+This is the most important step for YouTube Music authentication.
+
+1. **Install Python dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Run the YouTube Music setup script**
+   ```bash
+   python scripts/setup-ytmusic.py
+   ```
+   
+   The script will guide you through:
+   - Opening YouTube Music in your browser
+   - Extracting headers from browser network requests
+   - Generating the required `oauth.json` file
+
+3. **Follow the interactive prompts**
+   - The script provides step-by-step instructions
+   - You'll need to copy headers from your browser's developer tools
+   - Save the headers to `raw_headers.txt` when prompted
+   - The script will automatically generate `oauth.json`
+
+4. **Verify the setup**
+   - Ensure `oauth.json` is created in your project root
+   - **Important**: This file contains your YouTube Music authentication - keep it secure
+
+### Step 5: Test the Setup
+
+1. **Start the application**
+   ```bash
+   npm start
+   ```
+
+2. **Open your browser**
+   - Navigate to `http://localhost:3000`
+   - You should see the Spotisync interface
+
+3. **Test authentication**
+   - Click "Connect Spotify" and complete the OAuth flow
+   - YouTube Music should automatically authenticate using the generated headers
+
+## 🎯 Verification Checklist
+
+Ensure everything is working by checking:
+
+- [ ] Node.js is installed (run `node --version`)
+- [ ] Dependencies are installed (you should see `node_modules` folder)
+- [ ] `.env` file exists with correct Spotify credentials
+- [ ] `oauth.json` file exists in project root
+- [ ] Server starts without errors (`npm start`)
+- [ ] Browser loads `http://localhost:3000` successfully
+- [ ] Spotify authentication works
+- [ ] YouTube Music shows as connected
+
+## 🚨 Troubleshooting
+
+### Common Issues and Solutions
+
+**"Cannot find module" error**
 ```bash
+# Solution: Reinstall dependencies
+rm -rf node_modules package-lock.json
 npm install
 ```
 
-## Step 4: Start the Application
+**Spotify authentication fails**
+- Verify Client ID and Client Secret in `.env`
+- Check that redirect URI is exactly: `http://localhost:3000/callback`
+- Ensure redirect URI is added in Spotify Developer Dashboard
 
-Run the development server:
-```bash
-npm run dev
-```
+**YouTube Music authentication fails**
+- Regenerate headers: `python scripts/setup-ytmusic.py`
+- Ensure `oauth.json` is in the project root
+- Check that you're logged into YouTube Music in your browser
+- Verify the `raw_headers.txt` file contains valid headers
 
-The application will start at `http://127.0.0.1:3000`
+**"Permission denied" error**
+- Ensure you have write permissions in the project directory
+- Try running with administrator privileges if needed
 
-## Step 5: First Time Usage
+**Port already in use**
+- Change the PORT in `.env` to a different number (e.g., 3001)
+- Or kill the process using port 3000
 
-1. Open your browser and go to `http://127.0.0.1:3000`
-2. Click "Connect Spotify" to authenticate
-3. You'll be redirected to Spotify to authorize the app
-4. After authorization, you'll be redirected back to Spotisync
-5. Select your YouTube Music playlist (source)
-6. Select or create a Spotify playlist (destination)
-7. Click "Preview Sync" to see what tracks will be synced
-8. Review the matches and approve the ones you want to sync
-9. Click "Execute Sync" to perform the actual sync
-
-## Understanding the Matching System
-
-Spotisync uses a sophisticated matching system to ensure accuracy:
-
-### Perfect Matches ✅
-- Exact artist name and song title match
-- These are automatically selected for sync
-- Safe to sync without review
-
-### Needs Review ⚠️
-- Multiple possible matches found
-- Partial matches (similar but not identical)
-- Requires manual approval before syncing
-
-### Duplicates 📋
-- Songs already in the destination playlist
-- Spotisync won't add duplicates
-- Shows for reference only
-
-### Not Found ❌
-- No suitable matches found on Spotify
-- Cannot be synced automatically
-- May require manual search and addition
-
-## Tips for Better Matching
-
-1. **Clean Playlist Names**: Use clear, descriptive playlist names
-2. **Check Artist Names**: Sometimes artists use different names on different platforms
-3. **Review Uncertain Matches**: Take time to verify partial matches
-4. **Regular Syncing**: Sync regularly to keep playlists up to date
-
-## Troubleshooting
-
-### "Authentication Failed"
-- Check your Spotify Client ID and Client Secret
-- Ensure the redirect URI matches exactly: `http://127.0.0.1:3000/callback`
-- **Important**: Use `127.0.0.1` not `localhost` (Spotify requirement as of April 2025)
-- Make sure your Spotify app is not in development mode restrictions
-
-### "Redirect URI Mismatch"
-- Spotify now requires explicit IP addresses for local development
-- Use `http://127.0.0.1:3000/callback` instead of `http://localhost:3000/callback`
-- Double-check that your Spotify app settings match your `.env` file exactly
-
-### "YouTube Music Playlists Not Loading"
-- The current version uses sample data for YouTube Music
-- Full YouTube Music integration requires additional API setup
-- You can manually input track information for testing
-
-### "No Matches Found"
-- Try different search terms
-- Check if the artist/song exists on Spotify
-- Some tracks may not be available on Spotify due to licensing
-
-### "Server Won't Start"
-- Check if port 3000 is already in use
-- Try changing the PORT in your `.env` file
-- Make sure all dependencies are installed with `npm install`
-
-## Security Notes
-
-- Never share your `.env` file or commit it to version control
-- Your Spotify credentials are only used locally
-- No data is sent to external servers except Spotify's official API
-
-## Support
+### Getting Detailed Error Information
 
 If you encounter issues:
-1. Check the browser console for error messages
-2. Look at the server logs in your terminal
-3. Verify your environment configuration
-4. Try refreshing your browser and restarting the server
 
-## Next Steps
+1. **Check the console output** when running `npm start`
+2. **Open browser developer tools** (F12) and check the console
+3. **Look for specific error messages** and search for solutions
 
-Once you're comfortable with the basic functionality, you can:
-- Set up automated syncing
-- Configure multiple playlist pairs
-- Customize matching preferences
-- Add support for other music platforms
+## 🔐 Security Notes
+
+- **Never commit `.env` or `oauth.json`** to version control
+- **Keep your Spotify credentials secure**
+- **Regenerate YouTube Music headers if compromised**
+- **The oauth.json file contains authentication data** - treat it like a password
+
+## ✅ Next Steps
+
+Once setup is complete:
+
+1. **Authenticate with both services** through the web interface
+2. **Select a Spotify playlist** to sync
+3. **Choose or create a YouTube Music playlist** as destination
+4. **Start the sync process** and monitor progress
+
+## 🆘 Need Help?
+
+If you're still having issues:
+
+1. **Check the logs** in the terminal where you ran `npm start`
+2. **Review this guide** to ensure all steps were followed
+3. **Open an issue** on GitHub with:
+   - Your operating system
+   - Node.js version (`node --version`)
+   - Complete error messages
+   - Steps you've already tried
+
+## 📚 Additional Resources
+
+- [Spotify Web API Documentation](https://developer.spotify.com/documentation/web-api/)
+- [ytmusicapi Documentation](https://github.com/sigma67/ytmusicapi)
+- [Node.js Installation Guide](https://nodejs.org/en/download/)
+- [Python Installation Guide](https://python.org/downloads/)
+
+---
+
+**Happy syncing! 🎵**

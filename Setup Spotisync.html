@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotisync Setup Launcher</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            max-width: 600px;
+        }
+        h1 {
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        .emoji {
+            font-size: 3em;
+            margin: 20px 0;
+        }
+        .subtitle {
+            font-size: 1.2em;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+        .setup-options {
+            display: grid;
+            gap: 15px;
+            margin: 30px 0;
+        }
+        .setup-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1.1em;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: block;
+        }
+        .setup-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        .instructions {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+            text-align: left;
+        }
+        .step {
+            margin: 10px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        .step::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #4CAF50;
+            font-weight: bold;
+            font-size: 1.2em;
+        }        .terminal-cmd {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+            font-size: 0.9em;
+            cursor: pointer;
+            user-select: all;
+        }
+        .terminal-cmd:hover {
+            background: rgba(0, 0, 0, 0.7);
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="emoji">🎵</div>
+        <h1>Spotisync Setup</h1>
+        <div class="subtitle">Choose your preferred setup method</div>
+          <div class="setup-options">
+            <a href="Setup Spotisync.bat" class="setup-btn" download>
+                🖱️ Download Windows Batch Setup
+            </a>
+            <button class="setup-btn" onclick="openTerminalInstructions()">
+                💻 Show Terminal Commands
+            </button>
+            <button class="setup-btn" onclick="showDetailedInstructions()">
+                📖 Detailed Setup Instructions
+            </button>
+        </div>        <div class="instructions">
+            <h3>📋 Prerequisites:</h3>
+            <div class="step">Node.js (version 14 or higher)</div>
+            <div class="step">Python (any recent version)</div>
+            <div class="step">YouTube Music account</div>
+            
+            <div id="terminal-instructions" class="hidden">
+                <h3>💻 Terminal Commands:</h3>
+                <div class="terminal-cmd" onclick="copyToClipboard(this)">npm run setup</div>
+                <div class="terminal-cmd" onclick="copyToClipboard(this)">node scripts/interactive-setup.js</div>
+                <p style="font-size: 0.9em; opacity: 0.8;">Click commands to copy them</p>
+            </div>
+            
+            <div id="detailed-instructions" class="hidden">
+                <h3>🚀 Step by Step:</h3>
+                <div class="step">Download and double-click "Setup Spotisync.bat"</div>
+                <div class="step">Follow the interactive prompts</div>
+                <div class="step">Paste your YouTube Music headers when requested</div>
+                <div class="step">Press Enter twice when done pasting headers</div>
+                <div class="step">Choose whether to start the application</div>
+            </div>
+            
+            <h3>🔧 Quick Setup:</h3>
+            <div class="step">Download the batch file above</div>
+            <div class="step">Double-click it to start setup</div>
+            <div class="step">Follow the prompts - that's it!</div>
+        </div>
+    </div>    <script>
+        function openTerminalInstructions() {
+            const instructions = document.getElementById('terminal-instructions');
+            const detailed = document.getElementById('detailed-instructions');
+            
+            detailed.classList.add('hidden');
+            instructions.classList.toggle('hidden');
+        }
+
+        function showDetailedInstructions() {
+            const instructions = document.getElementById('terminal-instructions');
+            const detailed = document.getElementById('detailed-instructions');
+            
+            instructions.classList.add('hidden');
+            detailed.classList.toggle('hidden');
+        }
+
+        function copyToClipboard(element) {
+            const text = element.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = element.textContent;
+                element.textContent = '✅ Copied!';
+                setTimeout(() => {
+                    element.textContent = originalText;
+                }, 1000);
+            }).catch(() => {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                const originalText = element.textContent;
+                element.textContent = '✅ Copied!';
+                setTimeout(() => {
+                    element.textContent = originalText;
+                }, 1000);
+            });
+        }
+    </script>
+</body>
+</html>

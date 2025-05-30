@@ -88,6 +88,7 @@ sync_history.db
 # Authentication tokens (if stored locally)
 auth_tokens.json
 refresh_tokens.json
+oauth.json
 
 # Build artifacts
 build/

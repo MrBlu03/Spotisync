@@ -20,9 +20,7 @@ class SpotifyService {
         ];
         
         return this.spotify.createAuthorizeURL(scopes, 'state');
-    }
-
-    async authenticate(code) {
+    }    async authenticate(code) {
         try {
             console.log('Starting Spotify authentication...');
             const data = await this.spotify.authorizationCodeGrant(code);
@@ -33,25 +31,37 @@ class SpotifyService {
                 throw new Error('Invalid authentication response from Spotify');
             }
             
+            console.log('Authentication response received, setting tokens...');
             this.spotify.setAccessToken(data.body.access_token);
             this.spotify.setRefreshToken(data.body.refresh_token);
             this.isAuthenticated = true;
             
-            console.log('Spotify authentication successful');
+            console.log('Spotify authentication successful, testing API access...');
             
             // Test the authentication by fetching user info
             try {
                 const user = await this.getCurrentUser();
-                console.log('User authenticated:', user.id, user.display_name);
+                console.log('User authenticated successfully:', user.id, user.display_name);
+                
+                // Test API functionality by trying to fetch playlists
+                try {
+                    const playlists = await this.getUserPlaylists();
+                    console.log(`API test successful: fetched ${playlists.length} playlists`);
+                } catch (playlistError) {
+                    console.error('Playlist fetch test failed but user auth succeeded:', playlistError);
+                    // Don't fail authentication for this
+                }
+                
             } catch (userError) {
                 console.error('Authentication succeeded but user fetch failed:', userError);
                 this.isAuthenticated = false;
-                throw new Error('Authentication validation failed');
+                throw new Error('Authentication validation failed: ' + userError.message);
             }
             
-            // Set up auto refresh
+            // Set up auto refresh with better error handling
             setInterval(async () => {
                 try {
+                    console.log('Auto-refreshing access token...');
                     const refreshData = await this.spotify.refreshAccessToken();
                     this.spotify.setAccessToken(refreshData.body.access_token);
                     console.log('Token refreshed successfully');
@@ -64,6 +74,12 @@ class SpotifyService {
             return true;
         } catch (error) {
             console.error('Authentication failed:', error);
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack,
+                statusCode: error.statusCode,
+                body: error.body
+            });
             this.isAuthenticated = false;
             throw error;
         }
@@ -113,9 +129,7 @@ class SpotifyService {
             console.error('Error details:', error.message);
             throw error;
         }
-    }
-
-    async getPlaylistTracks(playlistId) {
+    }    async getPlaylistTracks(playlistId) {
         if (!this.isAuthenticated) {
             throw new Error('Not authenticated with Spotify');
         }
@@ -131,24 +145,59 @@ class SpotifyService {
                 
                 if (items.length === 0) break;
                 
-                tracks.push(...items.map(item => ({
-                    id: item.track.id,
-                    name: item.track.name,
-                    artists: item.track.artists.map(artist => artist.name),
-                    album: item.track.album.name,
-                    uri: item.track.uri
-                })));
+                // Filter out null/invalid tracks and map valid ones
+                const validTracks = items
+                    .filter(item => {
+                        // Check if track exists and has required properties
+                        if (!item || !item.track) {
+                            console.warn('Skipping item with null track:', item);
+                            return false;
+                        }
+                        
+                        const track = item.track;
+                        
+                        // Check for required properties
+                        if (!track.id || !track.name || !track.uri) {
+                            console.warn('Skipping track with missing required properties:', {
+                                id: track.id,
+                                name: track.name,
+                                uri: track.uri
+                            });
+                            return false;
+                        }
+                        
+                        // Check if artists array exists
+                        if (!track.artists || !Array.isArray(track.artists)) {
+                            console.warn('Skipping track with invalid artists:', track.name);
+                            return false;
+                        }
+                        
+                        return true;
+                    })
+                    .map(item => {
+                        const track = item.track;
+                        return {
+                            id: track.id,
+                            name: track.name,
+                            artists: track.artists.map(artist => artist.name || 'Unknown Artist'),
+                            album: track.album?.name || 'Unknown Album',
+                            uri: track.uri
+                        };
+                    });
+                
+                tracks.push(...validTracks);
 
                 offset += limit;
                 if (items.length < limit) break;
             }
 
+            console.log(`Successfully fetched ${tracks.length} valid tracks from playlist ${playlistId}`);
             return tracks;
         } catch (error) {
             console.error('Error fetching playlist tracks:', error);
             throw error;
         }
-    }    async searchTrack(trackName, artistName) {
+    }async searchTrack(trackName, artistName) {
         if (!this.isAuthenticated) {
             throw new Error('Not authenticated with Spotify');
         }
@@ -212,18 +261,33 @@ class SpotifyService {
                     ...searchQueries
                 ];
             }
-            
-            for (const query of searchQueries) {
+              for (const query of searchQueries) {
                 try {
                     const data = await this.spotify.searchTracks(query, { limit: 10 });
-                    const tracks = data.body.tracks.items.map(track => ({
-                        id: track.id,
-                        name: track.name,
-                        artists: track.artists.map(artist => artist.name),
-                        album: track.album.name,
-                        uri: track.uri,
-                        confidence: this.calculateMatchConfidence(trackName, artistName, track)
-                    }));
+                    const tracks = data.body.tracks.items
+                        .filter(track => {
+                            // Validate track has required properties
+                            if (!track || !track.id || !track.name || !track.uri) {
+                                console.warn('Skipping invalid track in search results:', track);
+                                return false;
+                            }
+                            
+                            // Validate artists array
+                            if (!track.artists || !Array.isArray(track.artists)) {
+                                console.warn('Skipping track with invalid artists:', track.name);
+                                return false;
+                            }
+                            
+                            return true;
+                        })
+                        .map(track => ({
+                            id: track.id,
+                            name: track.name,
+                            artists: track.artists.map(artist => artist.name || 'Unknown Artist'),
+                            album: track.album?.name || 'Unknown Album',
+                            uri: track.uri,
+                            confidence: this.calculateMatchConfidence(trackName, artistName, track)
+                        }));
                     
                     results.push(...tracks);
                     
@@ -578,6 +642,40 @@ class SpotifyService {
         } catch (error) {
             console.error('Error manually refreshing token:', error);
             return false;
+        }
+    }
+
+    async getTrack(trackId) {
+        if (!this.isAuthenticated) {
+            throw new Error('Not authenticated with Spotify');
+        }
+
+        try {
+            // Try refreshing token before important operations
+            await this.refreshToken();
+            
+            const data = await this.spotify.getTrack(trackId);
+            
+            // Validate response
+            if (!data || !data.body) {
+                console.error('Invalid getTrack response:', data);
+                throw new Error('Invalid response from Spotify API');
+            }
+            
+            const track = data.body;
+            
+            // Return track in the same format as searchTrack
+            return {
+                id: track.id,
+                name: track.name,
+                artists: track.artists.map(artist => artist.name || 'Unknown Artist'),
+                album: track.album?.name || 'Unknown Album',
+                uri: track.uri,
+                duration_ms: track.duration_ms
+            };
+        } catch (error) {
+            console.error('Error getting track by ID:', error);
+            throw error;
         }
     }
 }

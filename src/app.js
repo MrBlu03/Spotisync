@@ -5,7 +5,6 @@ const path = require('path');
 require('dotenv').config();
 
 const SpotifyService = require('./services/spotifyServices');
-const YouTubeMusicService = require('./services/youtubeMusicService');
 const SyncService = require('./services/syncService');
 
 const app = express();
@@ -19,8 +18,29 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // Services
 const spotifyService = new SpotifyService();
-const youtubeMusicService = new YouTubeMusicService();
-const syncService = new SyncService(spotifyService, youtubeMusicService);
+// const youtubeMusicService = new YouTubeMusicService();
+let youtubeMusicService = null; // Will be initialized lazily
+const syncService = new SyncService(spotifyService, null); // Pass null for now
+
+// Load the YouTube Music service factory
+const createYouTubeMusicService = require('./services/youtubeMusicServiceFactory');
+
+// Initialize YouTube Music service with cookies on startup
+(async () => {
+    try {
+        // Use factory function to avoid constructor issues
+        youtubeMusicService = createYouTubeMusicService();
+        await youtubeMusicService.initialize();
+        console.log('✅ YouTube Music service initialized successfully with cookie authentication');
+        
+        // Update sync service with the initialized YouTube Music service
+        syncService.youtubeMusic = youtubeMusicService;
+        
+    } catch (error) {
+        console.error('❌ Failed to initialize YouTube Music service:', error.message);
+        console.log('ℹ️  Make sure oauth.json file exists in the project root with valid cookies');
+    }
+})();
 
 // Routes
 app.get('/', (req, res) => {
@@ -34,8 +54,11 @@ app.get('/auth/spotify', (req, res) => {
 });
 
 app.get('/auth/youtube', (req, res) => {
-    const authUrl = youtubeMusicService.getAuthUrl();
-    res.redirect(authUrl);
+    // No longer needed with cookie-based auth
+    res.json({ 
+        message: 'YouTube Music authentication is now handled via cookies. Service is automatically initialized on startup.',
+        authenticated: youtubeMusicService ? youtubeMusicService.isAuthenticated : false
+    });
 });
 
 app.get('/callback', async (req, res) => {
@@ -50,14 +73,11 @@ app.get('/callback', async (req, res) => {
 });
 
 app.get('/auth/youtube/callback', async (req, res) => {
-    try {
-        const { code } = req.query;
-        await youtubeMusicService.authenticate(code);
-        res.redirect('/?ytauth=success');
-    } catch (error) {
-        console.error('YouTube authentication error:', error);
-        res.redirect('/?ytauth=error');
-    }
+    // No longer needed with cookie-based auth
+    res.json({ 
+        message: 'YouTube Music authentication callback is no longer needed. Service uses cookie-based authentication.',
+        authenticated: youtubeMusicService ? youtubeMusicService.isAuthenticated : false
+    });
 });
 
 // API routes
@@ -247,12 +267,147 @@ app.post('/api/sync/execute-reverse', async (req, res) => {
         console.log('Reverse sync execute completed successfully:', result.summary);
         res.json(result);
     } catch (error) {
-        console.error('Error executing reverse sync:', error);
-        console.error('Error stack:', error.stack);
+        console.error('Error executing reverse sync:', error);        console.error('Error stack:', error.stack);
         res.status(500).json({ 
             error: 'Failed to execute reverse sync',
             details: error.message 
         });
+    }
+});
+
+// Endpoint to verify a Spotify link/URI and get track info
+app.post('/api/spotify/verify-link', async (req, res) => {
+    try {
+        const { link, sourceTrackName, sourceTrackArtist } = req.body;
+        
+        if (!link) {
+            return res.status(400).json({ error: 'No link provided' });
+        }
+        
+        console.log(`Verifying Spotify link: ${link} for source track "${sourceTrackName}" by "${sourceTrackArtist}"`);
+        
+        // Extract track ID from various Spotify URL formats or URIs
+        let trackId;
+        
+        // URI format: spotify:track:1234567890abcdef
+        if (link.startsWith('spotify:track:')) {
+            trackId = link.split(':')[2];
+        } 
+        // URL format: https://open.spotify.com/track/1234567890abcdef
+        else if (link.includes('spotify.com/track/')) {
+            const url = new URL(link);
+            trackId = url.pathname.split('/').pop().split('?')[0];
+        }
+        // Direct ID format
+        else if (/^[a-zA-Z0-9]{22}$/.test(link)) {
+            trackId = link;
+        }
+        else {
+            return res.status(400).json({ error: 'Invalid Spotify link format. Please use a Spotify URI or URL.' });
+        }
+        
+        // Get track info from Spotify API
+        const trackInfo = await spotifyService.getTrack(trackId);
+        
+        if (!trackInfo) {
+            return res.status(404).json({ error: 'Track not found on Spotify' });
+        }
+        
+        // Format the track info for consistent handling
+        const formattedTrack = {
+            id: trackInfo.id,
+            uri: trackInfo.uri,
+            name: trackInfo.name,
+            artists: trackInfo.artists.map(a => a.name),
+            album: trackInfo.album ? { name: trackInfo.album.name } : null,
+            duration_ms: trackInfo.duration_ms,
+            isCustomMatch: true
+        };
+        
+        res.json(formattedTrack);
+    } catch (error) {
+        console.error('Error verifying Spotify link:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Endpoint to verify a YouTube Music link and get track info
+app.post('/api/youtube/verify-link', async (req, res) => {
+    try {
+        const { link, sourceTrackName, sourceTrackArtist } = req.body;
+        
+        if (!link) {
+            return res.status(400).json({ error: 'No link provided' });
+        }
+        
+        console.log(`Verifying YouTube link: ${link} for source track "${sourceTrackName}" by "${sourceTrackArtist}"`);
+        
+        // Extract video ID from various YouTube URL formats
+        let videoId;
+        
+        // Standard YT URL: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+        if (link.includes('youtube.com/watch?v=')) {
+            const url = new URL(link);
+            videoId = url.searchParams.get('v');
+        }
+        // Short YT URL: https://youtu.be/dQw4w9WgXcQ
+        else if (link.includes('youtu.be/')) {
+            videoId = link.split('youtu.be/')[1].split('?')[0];
+        }
+        // YT Music URL: https://music.youtube.com/watch?v=dQw4w9WgXcQ
+        else if (link.includes('music.youtube.com/watch?v=')) {
+            const url = new URL(link);
+            videoId = url.searchParams.get('v');
+        }
+        // Direct ID format
+        else if (/^[a-zA-Z0-9_-]{11}$/.test(link)) {
+            videoId = link;
+        }
+        else {
+            return res.status(400).json({ error: 'Invalid YouTube link format. Please use a YouTube URL or video ID.' });
+        }
+        
+        // Get track info from YouTube Music
+        try {
+            // Call the Python service to get track info
+            const response = await axios.get(`${process.env.YTMUSIC_SEARCH_URL.replace('/search', '/video/')}${videoId}`);
+            const trackInfo = response.data;
+            
+            if (!trackInfo || trackInfo.error) {
+                return res.status(404).json({ error: trackInfo?.error || 'Track not found on YouTube Music' });
+            }
+            
+            // Format the track info for consistent handling
+            const formattedTrack = {
+                id: videoId,
+                videoId: videoId,
+                title: trackInfo.title || sourceTrackName,
+                artist: trackInfo.artist || sourceTrackArtist,
+                artists: trackInfo.artists || [sourceTrackArtist],
+                duration: trackInfo.duration || '0:00',
+                isCustomMatch: true
+            };
+            
+            res.json(formattedTrack);
+        } catch (error) {
+            console.error('Error getting YouTube video info:', error);
+            
+            // If the API call fails, create a basic track structure with the provided ID
+            // This allows manual links to work even if the lookup fails
+            const basicTrack = {
+                id: videoId,
+                videoId: videoId,
+                title: sourceTrackName || 'Unknown Track',
+                artist: sourceTrackArtist || 'Unknown Artist',
+                isCustomMatch: true,
+                isManualLink: true
+            };
+            
+            res.json(basicTrack);
+        }
+    } catch (error) {
+        console.error('Error verifying YouTube link:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -264,6 +419,56 @@ app.post('/api/spotify/playlist', async (req, res) => {
     } catch (error) {
         console.error('Error creating playlist:', error);
         res.status(500).json({ error: 'Failed to create playlist' });
+    }
+});
+
+// Endpoint to manually refresh YouTube Music authentication
+app.post('/api/youtube/refresh-auth', async (req, res) => {
+    try {
+        const { cookieString } = req.body;
+        
+        if (!cookieString) {
+            return res.status(400).json({ error: 'No cookie string provided' });
+        }
+        
+        console.log('🔄 Manually refreshing YouTube Music authentication...');
+        
+        // Update the oauth.json file with the new cookie
+        const fs = require('fs');
+        const oauthPath = path.join(process.cwd(), 'oauth.json');
+        
+        let authData = {};
+        if (fs.existsSync(oauthPath)) {
+            authData = JSON.parse(fs.readFileSync(oauthPath, 'utf8'));
+        }
+        
+        authData.cookie = cookieString;
+        authData.lastUpdated = new Date().toISOString();
+        
+        fs.writeFileSync(oauthPath, JSON.stringify(authData, null, 2));
+        
+        // Re-initialize the YouTube Music service
+        youtubeMusicService = createYouTubeMusicService();
+        const initialized = await youtubeMusicService.initialize();
+        
+        if (initialized) {
+            // Update sync service with the re-initialized YouTube Music service
+            syncService.youtubeMusic = youtubeMusicService;
+            
+            console.log('✅ YouTube Music authentication refreshed successfully');
+            res.json({ 
+                success: true, 
+                message: 'YouTube Music authentication refreshed successfully',
+                authenticated: youtubeMusicService.isAuthenticated
+            });
+        } else {
+            console.error('❌ Failed to refresh YouTube Music authentication');
+            res.status(500).json({ error: 'Failed to refresh authentication' });
+        }
+        
+    } catch (error) {
+        console.error('Error refreshing YouTube Music auth:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 

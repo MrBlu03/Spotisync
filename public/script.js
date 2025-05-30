@@ -4,6 +4,7 @@ class SpotisyncApp {
         this.selectedTracks = new Set();
         this.spotifyPlaylists = [];
         this.youtubePlayists = [];
+        this.customMatches = new Map(); // Store custom matches by trackId
         this.init();
     }
 
@@ -23,7 +24,7 @@ class SpotisyncApp {
         document.getElementById('spotify-auth-btn').addEventListener('click', () => {
             this.authenticateSpotify();
         });        document.getElementById('youtube-auth-btn').addEventListener('click', () => {
-            this.authenticateYoutube();
+            this.showYoutubeCookieInfo();
         });
 
         // Playlist selection
@@ -63,7 +64,7 @@ class SpotisyncApp {
             btn.addEventListener('click', (e) => {
                 this.switchTab(e.target.dataset.tab);
             });        });
-    }
+        }
 
     checkUrlParams() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -76,15 +77,7 @@ class SpotisyncApp {
             this.showToast('Spotify authentication failed. Please try again.', 'error');
             // Clean up URL
             window.history.replaceState({}, document.title, window.location.pathname);
-        } else if (urlParams.get('ytauth') === 'success') {
-            this.showToast('YouTube Music authentication successful!', 'success');
-            this.checkAuthStatus();
-            // Clean up URL
-            window.history.replaceState({}, document.title, window.location.pathname);
-        } else if (urlParams.get('ytauth') === 'error') {
-            this.showToast('YouTube Music authentication failed. Please try again.', 'error');
-            // Clean up URL
-            window.history.replaceState({}, document.title, window.location.pathname);        }
+        }
     }
 
     async checkAuthStatus() {
@@ -106,25 +99,28 @@ class SpotisyncApp {
                 document.getElementById('spotify-status').textContent = 'Error';
                 document.getElementById('spotify-status').className = 'status-indicator status-error';
                 spotifyResponse = { ok: false };
-            }
-
-            // Check YouTube Music authentication
+            }            // Check YouTube Music authentication (cookie-based)
             let youtubeResponse;
             try {
                 youtubeResponse = await fetch('/api/youtube/playlists');
                 if (youtubeResponse.ok) {
-                    document.getElementById('youtube-status').textContent = 'Connected';
+                    document.getElementById('youtube-status').textContent = 'Connected (Cookie Auth)';
                     document.getElementById('youtube-status').className = 'status-indicator status-connected';
-                    document.getElementById('youtube-auth-btn').style.display = 'none';
+                    document.getElementById('youtube-auth-btn').textContent = 'Refresh Cookies';
+                    document.getElementById('youtube-auth-btn').className = 'btn btn-secondary';
                 } else {
-                    document.getElementById('youtube-status').textContent = 'Not Connected';
-                    document.getElementById('youtube-status').className = 'status-indicator status-error';
+                    document.getElementById('youtube-status').textContent = 'Check Cookie Auth';
+                    document.getElementById('youtube-status').className = 'status-indicator status-warning';
+                    document.getElementById('youtube-auth-btn').textContent = 'Cookie Setup Info';
+                    document.getElementById('youtube-auth-btn').className = 'btn btn-youtube';
                 }
             } catch (error) {
                 console.error('Error checking YouTube auth:', error);
-                document.getElementById('youtube-status').textContent = 'Not Connected';
-                document.getElementById('youtube-status').className = 'status-indicator status-error';
+                document.getElementById('youtube-status').textContent = 'Check Cookie Auth';
+                document.getElementById('youtube-status').className = 'status-indicator status-warning';
                 youtubeResponse = { ok: false };
+                document.getElementById('youtube-auth-btn').textContent = 'Cookie Setup Info';
+                document.getElementById('youtube-auth-btn').className = 'btn btn-youtube';
             }
 
             // Load playlists and show playlist section if both services are connected
@@ -135,18 +131,114 @@ class SpotisyncApp {
                 // If only one service is connected, still load playlists
                 await this.loadPlaylists();
             }
-        } catch (error) {
-            console.error('Error checking auth status:', error);
+        } catch (error) {            console.error('Error checking auth status:', error);
             document.getElementById('spotify-status').textContent = 'Error';
             document.getElementById('spotify-status').className = 'status-indicator status-error';
             document.getElementById('youtube-status').textContent = 'Error';
-            document.getElementById('youtube-status').className = 'status-indicator status-error';        }
+            document.getElementById('youtube-status').className = 'status-indicator status-error';
+        }
     }
 
     authenticateSpotify() {
         window.location.href = '/auth/spotify';
-    }    authenticateYoutube() {
-        window.location.href = '/auth/youtube';
+    }
+
+    showYoutubeCookieInfo() {
+        this.showModal('YouTube Music Authentication', `
+            <div class="cookie-auth-info">
+                <p>YouTube Music uses cookie-based authentication.</p>
+                <p><strong>If you're getting authentication errors:</strong></p>
+                <ol>
+                    <li>Open YouTube Music in your browser and log in</li>
+                    <li>Open Developer Tools (F12)</li>
+                    <li>Go to Application → Cookies → https://music.youtube.com</li>
+                    <li>Copy all cookies or use a cookie export extension</li>
+                    <li>Paste the cookie string below to refresh authentication</li>
+                </ol>
+                
+                <div class="cookie-input-section">
+                    <label for="cookie-string">Cookie String:</label>
+                    <textarea id="cookie-string" placeholder="Paste your cookie string here..." rows="4"></textarea>
+                    <button id="refresh-cookies-btn" class="action-btn">Refresh Authentication</button>
+                </div>
+                
+                <div class="auth-status">
+                    <p>Current YouTube Music Status: <span id="yt-auth-status">Checking...</span></p>
+                </div>
+            </div>
+        `);
+        
+        // Check current auth status
+        this.updateYouTubeAuthStatus();
+        
+        // Setup cookie refresh handler
+        document.getElementById('refresh-cookies-btn').addEventListener('click', () => {
+            this.refreshYouTubeCookies();
+        });
+    }
+
+    async updateYouTubeAuthStatus() {
+        try {
+            const response = await fetch('/api/auth/status');
+            const status = await response.json();
+            const statusElement = document.getElementById('yt-auth-status');
+            
+            if (statusElement) {
+                if (status.youtube?.authenticated) {
+                    statusElement.textContent = '✅ Authenticated';
+                    statusElement.style.color = 'green';
+                } else {
+                    statusElement.textContent = '❌ Not Authenticated';
+                    statusElement.style.color = 'red';
+                }
+            }
+        } catch (error) {
+            console.error('Error checking auth status:', error);
+            const statusElement = document.getElementById('yt-auth-status');
+            if (statusElement) {
+                statusElement.textContent = '❓ Status Unknown';
+                statusElement.style.color = 'orange';
+            }
+        }
+    }
+
+    async refreshYouTubeCookies() {
+        const cookieString = document.getElementById('cookie-string').value.trim();
+        
+        if (!cookieString) {
+            this.showToast('Please paste a cookie string first', 'error');
+            return;
+        }
+        
+        this.showLoading('Refreshing YouTube Music authentication...');
+        
+        try {
+            const response = await fetch('/api/youtube/refresh-auth', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ cookieString })
+            });
+
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                this.showToast('YouTube Music authentication refreshed successfully!', 'success');
+                this.updateYouTubeAuthStatus();
+                document.getElementById('cookie-string').value = ''; // Clear the input
+                
+                // Refresh the playlists
+                await this.loadPlaylists();
+            } else {
+                this.showToast(`Error: ${result.error || 'Failed to refresh authentication'}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error refreshing cookies:', error);
+            this.showToast('Failed to refresh authentication', 'error');
+        } finally {
+            this.hideLoading();
+        }
     }
 
     async loadPlaylists() {
@@ -551,11 +643,14 @@ class SpotisyncApp {
         });
 
         this.updateExecuteButton();
-    }
-
-    displaySyncStats() {
+    }    displaySyncStats() {
         const stats = this.currentPreview.summary;
-        const syncablePercentage = Math.round((stats.perfectMatchCount / stats.totalYoutubeTracks) * 100);
+        
+        // Handle both sync directions - use the appropriate total tracks count
+        const totalTracks = stats.totalYoutubeTracks || stats.totalSpotifyTracks || 0;
+        const syncablePercentage = totalTracks > 0 
+            ? Math.round((stats.perfectMatchCount / totalTracks) * 100)
+            : 0;
 
         document.getElementById('sync-stats').innerHTML = `
             <div class="stat-card stat-perfect">
@@ -602,21 +697,47 @@ class SpotisyncApp {
 
         const trackId = `${type}-${index}`;
 
-        // Ensure track and youtubeTrack exist
-        if (!track || !track.youtubeTrack) {
+        // Determine sync direction by checking track structure and current sync direction
+        const syncDirection = document.getElementById('sync-direction').value;
+        const isReverseSync = syncDirection === 'spotify-to-youtube';
+        
+        // Validate track structure based on sync direction and track type
+        if (!track) {
             console.warn('Invalid track object:', track);
             div.innerHTML = '<div class="track-info"><div class="track-title">Invalid track data</div></div>';
             return div;
         }
-
-        let content = '';
+        
+        // For reverse sync "no-match" tracks, only spotifyTrack exists
+        if (isReverseSync && type === 'no-match') {
+            if (!track.spotifyTrack) {
+                console.warn('Invalid reverse sync no-match track object:', track);
+                div.innerHTML = '<div class="track-info"><div class="track-title">Invalid track data</div></div>';
+                return div;
+            }
+        } else {
+            // For all other cases, check appropriate track property exists
+            const requiredProperty = isReverseSync ? 'spotifyTrack' : 'youtubeTrack';
+            if (!track[requiredProperty]) {
+                console.warn(`Invalid track object - missing ${requiredProperty}:`, track);
+                div.innerHTML = '<div class="track-info"><div class="track-title">Invalid track data</div></div>';
+                return div;
+            }
+        }        let content = '';
         let actions = '';
 
-        if (type === 'perfect') {
+        // Determine which track info to display based on sync direction (reuse existing isReverseSync variable)
+        const sourceTrack = isReverseSync ? track.spotifyTrack : track.youtubeTrack;
+        const targetTrack = isReverseSync ? track.youtubeTrack : track.spotifyTrack;        if (type === 'perfect') {
+            const title = sourceTrack.name || sourceTrack.title || 'Unknown Title';
+            const artist = isReverseSync ? 
+                (sourceTrack.artists && Array.isArray(sourceTrack.artists) ? sourceTrack.artists.join(', ') : sourceTrack.artist || 'Unknown Artist') : 
+                sourceTrack.artist;
+            
             content = `
                 <div class="track-info">
-                    <div class="track-title">${track.youtubeTrack.title}</div>
-                    <div class="track-artist">by ${track.youtubeTrack.artist}</div>
+                    <div class="track-title">${title}</div>
+                    <div class="track-artist">by ${artist}</div>
                 </div>
                 <div class="track-confidence confidence-perfect">Perfect Match</div>
             `;
@@ -624,28 +745,63 @@ class SpotisyncApp {
                 <input type="checkbox" id="${trackId}" class="track-checkbox" checked>
                 <label for="${trackId}">Include in sync</label>
             `;        } else if (type === 'uncertain') {
-            const matches = track.spotifyMatches || [];
-            const matchesHtml = matches.map(match => 
-                `<div style="margin-left: 20px; color: #718096; font-size: 0.9rem;">
-                    → ${match.name} by ${match.artists.join(', ')} 
-                    <span class="track-confidence confidence-${match.confidence}">${match.confidence}</span>
-                </div>`            ).join('');
+            const title = sourceTrack.name || sourceTrack.title || 'Unknown Title';
+            const artist = isReverseSync ? 
+                (sourceTrack.artists && Array.isArray(sourceTrack.artists) ? sourceTrack.artists.join(', ') : sourceTrack.artist || 'Unknown Artist') : 
+                sourceTrack.artist;
+            
+            const matches = isReverseSync ? (track.youtubeMusicMatches || []) : (track.spotifyMatches || []);
+            const matchesHtml = matches.map(match => {
+                if (isReverseSync) {
+                    return `<div style="margin-left: 20px; color: #718096; font-size: 0.9rem;">
+                        → ${match.title} by ${match.artist} 
+                        <span class="track-confidence confidence-${match.confidence}">${match.confidence}</span>
+                    </div>`;
+                } else {
+                    const matchArtist = match.artists && Array.isArray(match.artists) ? match.artists.join(', ') : match.artist || 'Unknown Artist';
+                    return `<div style="margin-left: 20px; color: #718096; font-size: 0.9rem;">
+                        → ${match.name} by ${matchArtist} 
+                        <span class="track-confidence confidence-${match.confidence}">${match.confidence}</span>
+                    </div>`;
+                }
+            }).join('');
 
-            // Show original YouTube information for manual searching
-            const youtubeInfo = (track.youtubeTrack && (track.youtubeTrack.rawTitle || track.youtubeTrack.channelTitle)) ? `
-                <div class="youtube-info" style="margin-top: 8px; padding: 8px; background: #f7fafc; border-radius: 6px; border-left: 3px solid #ff0000;">
-                    ${track.youtubeTrack.rawTitle ? `<div class="youtube-title" style="font-size: 0.85rem; color: #4a5568; margin-bottom: 2px;"><strong>YouTube:</strong> ${track.youtubeTrack.rawTitle}</div>` : ''}
-                    ${track.youtubeTrack.channelTitle ? `<div class="youtube-channel" style="font-size: 0.85rem; color: #718096;"><strong>Channel:</strong> ${track.youtubeTrack.channelTitle}</div>` : ''}
-                </div>
-            ` : '';
+            // Show original source information for manual searching
+            let originalInfo = '';
+            if (isReverseSync) {
+                // For reverse sync, show Spotify info
+                const displayArtist = sourceTrack.artists && Array.isArray(sourceTrack.artists) ? sourceTrack.artists.join(', ') : sourceTrack.artist || 'Unknown Artist';
+                originalInfo = `
+                    <div class="spotify-info" style="margin-top: 8px; padding: 8px; background: #f7fafc; border-radius: 6px; border-left: 3px solid #1db954;">
+                        <div class="spotify-title" style="font-size: 0.85rem; color: #4a5568; margin-bottom: 2px;"><strong>Spotify:</strong> ${sourceTrack.name}</div>
+                        <div class="spotify-artist" style="font-size: 0.85rem; color: #718096;"><strong>Artist:</strong> ${displayArtist}</div>
+                        ${sourceTrack.album ? `<div class="spotify-album" style="font-size: 0.85rem; color: #718096;"><strong>Album:</strong> ${sourceTrack.album.name || sourceTrack.album}</div>` : ''}
+                    </div>
+                `;
+            } else {
+                // For original sync, show YouTube info
+                originalInfo = (sourceTrack && (sourceTrack.rawTitle || sourceTrack.channelTitle)) ? `
+                    <div class="youtube-info" style="margin-top: 8px; padding: 8px; background: #f7fafc; border-radius: 6px; border-left: 3px solid #ff0000;">
+                        ${sourceTrack.rawTitle ? `<div class="youtube-title" style="font-size: 0.85rem; color: #4a5568; margin-bottom: 2px;"><strong>YouTube:</strong> ${sourceTrack.rawTitle}</div>` : ''}
+                        ${sourceTrack.channelTitle ? `<div class="youtube-channel" style="font-size: 0.85rem; color: #718096;"><strong>Channel:</strong> ${sourceTrack.channelTitle}</div>` : ''}
+                    </div>
+                ` : '';
+            }
 
             content = `
                 <div class="track-info">
-                    <div class="track-title">${track.youtubeTrack.title}</div>
-                    <div class="track-artist">by ${track.youtubeTrack.artist}</div>
-                    <div style="margin-top: 8px; font-size: 0.9rem; color: #ed8936;">${track.reason}</div>
-                    ${youtubeInfo}
+                    <div class="track-title">${title}</div>
+                    <div class="track-artist">by ${artist}</div>                    <div style="margin-top: 8px; font-size: 0.9rem; color: #ed8936;">${track.reason}</div>
+                    ${originalInfo}
                     ${matchesHtml}
+                    <div class="manual-match-container" style="margin-top: 12px; border-top: 1px solid #edf2f7; padding-top: 10px;">
+                        <div style="font-weight: 600; margin-bottom: 8px;">Override with Custom Match:</div>
+                        <input type="text" class="manual-match-input" placeholder="${isReverseSync ? 'YouTube Video ID or URL' : 'Spotify Track URL or URI'}" 
+                            style="width: 100%; padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; margin-bottom: 8px;">
+                        <button class="action-btn manual-match-btn" data-track-id="${trackId}">
+                            Apply Custom Match
+                        </button>
+                    </div>
                 </div>
             `;
             actions = `
@@ -654,34 +810,64 @@ class SpotisyncApp {
                 </button>
             `;
         } else if (type === 'duplicate') {
+            const title = isReverseSync ? sourceTrack.name : sourceTrack.title;
+            const artist = isReverseSync ? 
+                (sourceTrack.artists && Array.isArray(sourceTrack.artists) ? sourceTrack.artists.join(', ') : sourceTrack.artist || 'Unknown Artist') : 
+                sourceTrack.artist;
+            
             content = `
                 <div class="track-info">
-                    <div class="track-title">${track.youtubeTrack.title}</div>
-                    <div class="track-artist">by ${track.youtubeTrack.artist}</div>
+                    <div class="track-title">${title}</div>
+                    <div class="track-artist">by ${artist}</div>
                     <div style="margin-top: 8px; font-size: 0.9rem; color: #4299e1;">${track.reason}</div>
                 </div>
                 <div class="track-confidence confidence-perfect">Already in Playlist</div>
-            `;        } else if (type === 'no-match') {
-            // Show original YouTube information for manual searching
-            const youtubeInfo = (track.youtubeTrack && (track.youtubeTrack.rawTitle || track.youtubeTrack.channelTitle)) ? `
-                <div class="youtube-info" style="margin-top: 8px; padding: 8px; background: #f7fafc; border-radius: 6px; border-left: 3px solid #ff0000;">
-                    ${track.youtubeTrack.rawTitle ? `<div class="youtube-title" style="font-size: 0.85rem; color: #4a5568; margin-bottom: 2px;"><strong>YouTube:</strong> ${track.youtubeTrack.rawTitle}</div>` : ''}
-                    ${track.youtubeTrack.channelTitle ? `<div class="youtube-channel" style="font-size: 0.85rem; color: #718096;"><strong>Channel:</strong> ${track.youtubeTrack.channelTitle}</div>` : ''}
-                </div>
-            ` : '';
+            `;
+        } else if (type === 'no-match') {
+            const title = isReverseSync ? sourceTrack.name : sourceTrack.title;
+            const artist = isReverseSync ? 
+                (sourceTrack.artists && Array.isArray(sourceTrack.artists) ? sourceTrack.artists.join(', ') : sourceTrack.artist || 'Unknown Artist') : 
+                sourceTrack.artist;
+            
+            // Show original source information for manual searching
+            let originalInfo = '';
+            if (isReverseSync) {
+                // For reverse sync, show Spotify info
+                const displayArtist = sourceTrack.artists && Array.isArray(sourceTrack.artists) ? sourceTrack.artists.join(', ') : sourceTrack.artist || 'Unknown Artist';
+                originalInfo = `
+                    <div class="spotify-info" style="margin-top: 8px; padding: 8px; background: #f7fafc; border-radius: 6px; border-left: 3px solid #1db954;">
+                        <div class="spotify-title" style="font-size: 0.85rem; color: #4a5568; margin-bottom: 2px;"><strong>Spotify:</strong> ${sourceTrack.name}</div>
+                        <div class="spotify-artist" style="font-size: 0.85rem; color: #718096;"><strong>Artist:</strong> ${displayArtist}</div>
+                        ${sourceTrack.album ? `<div class="spotify-album" style="font-size: 0.85rem; color: #718096;"><strong>Album:</strong> ${sourceTrack.album.name || sourceTrack.album}</div>` : ''}
+                    </div>
+                `;
+            } else {
+                // For original sync, show YouTube info
+                originalInfo = (sourceTrack && (sourceTrack.rawTitle || sourceTrack.channelTitle)) ? `
+                    <div class="youtube-info" style="margin-top: 8px; padding: 8px; background: #f7fafc; border-radius: 6px; border-left: 3px solid #ff0000;">
+                        ${sourceTrack.rawTitle ? `<div class="youtube-title" style="font-size: 0.85rem; color: #4a5568; margin-bottom: 2px;"><strong>YouTube:</strong> ${sourceTrack.rawTitle}</div>` : ''}
+                        ${sourceTrack.channelTitle ? `<div class="youtube-channel" style="font-size: 0.85rem; color: #718096;"><strong>Channel:</strong> ${sourceTrack.channelTitle}</div>` : ''}
+                    </div>
+                ` : '';
+            }
 
             content = `
-                <div class="track-info">
-                    <div class="track-title">${track.youtubeTrack.title}</div>
-                    <div class="track-artist">by ${track.youtubeTrack.artist}</div>
+                <div class="track-info">                    <div class="track-title">${title}</div>
+                    <div class="track-artist">by ${artist}</div>
                     <div style="margin-top: 8px; font-size: 0.9rem; color: #f56565;">${track.reason}</div>
-                    ${youtubeInfo}
+                    ${originalInfo}
+                    <div class="manual-match-container" style="margin-top: 12px; border-top: 1px solid #edf2f7; padding-top: 10px;">
+                        <div style="font-weight: 600; margin-bottom: 8px;">Add Custom Match:</div>
+                        <input type="text" class="manual-match-input" placeholder="${isReverseSync ? 'YouTube Video ID or URL' : 'Spotify Track URL or URI'}" 
+                            style="width: 100%; padding: 8px; border: 1px solid #cbd5e0; border-radius: 4px; margin-bottom: 8px;">
+                        <button class="action-btn manual-match-btn" data-track-id="${trackId}">
+                            Apply Custom Match
+                        </button>
+                    </div>
                 </div>
                 <div class="track-confidence confidence-poor">Not Found</div>
             `;
-        }
-
-        div.innerHTML = content + (actions ? `<div class="track-actions">${actions}</div>` : '');
+        }        div.innerHTML = content + (actions ? `<div class="track-actions">${actions}</div>` : '');
 
         // Add event listener for checkbox changes
         if (type === 'perfect') {
@@ -695,20 +881,37 @@ class SpotisyncApp {
                 this.updateExecuteButton();
             });
         }
+        
+        // Add event listener for custom match buttons
+        if (type === 'uncertain' || type === 'no-match') {
+            const matchBtn = div.querySelector('.manual-match-btn');
+            if (matchBtn) {
+                matchBtn.addEventListener('click', (e) => {
+                    const input = div.querySelector('.manual-match-input');
+                    const customValue = input.value;
+                    this.applyCustomMatch(trackId, customValue);
+                });
+            }
+        }
 
         return div;
-    }
-
-    approveUncertainTrack(trackId) {
-        const [type, index] = trackId.split('-');
-        const track = this.currentPreview.uncertainMatches[parseInt(index)];
+    }    approveUncertainTrack(trackId) {
+        // Parse trackId properly for "uncertain" pattern
+        const trackIndex = parseInt(trackId.substring(10)); // Remove "uncertain-" prefix
+        const track = this.currentPreview.uncertainMatches[trackIndex];
+        const syncDirection = document.getElementById('sync-direction').value;
+        const isReverseSync = syncDirection === 'spotify-to-youtube';
         
-        if (track.spotifyMatches && track.spotifyMatches.length > 0) {
+        // Check for matches based on sync direction
+        const hasMatches = isReverseSync ? 
+            (track.youtubeMatches && track.youtubeMatches.length > 0) :
+            (track.spotifyMatches && track.spotifyMatches.length > 0);
+        
+        if (hasMatches) {
             // Add the best match to selected tracks
             this.selectedTracks.add(trackId);
-            
-            // Update UI to show it's approved
-            const trackElement = document.querySelector(`[data-type="${type}"][data-index="${index}"]`);
+              // Update UI to show it's approved
+            const trackElement = document.querySelector(`[data-type="uncertain"][data-index="${trackIndex}"]`);
             const button = trackElement.querySelector('.action-approve');
             button.textContent = 'Approved';
             button.className = 'action-btn action-approved';
@@ -731,28 +934,55 @@ class SpotisyncApp {
             const sourcePlaylistId = document.getElementById('source-playlist').value;
             const destPlaylistId = document.getElementById('destination-playlist').value;
             const createNewPlaylist = destPlaylistId === 'new';
-            const newPlaylistName = document.getElementById('new-playlist-name').value;
-
-            // Prepare approved tracks
+            const newPlaylistName = document.getElementById('new-playlist-name').value;            // Prepare approved tracks
             const approvedTracks = [];
-            
+            const isReverseSync = syncDirection === 'spotify-to-youtube';
+              // Process selected tracks
             this.selectedTracks.forEach(trackId => {
-                const [type, index] = trackId.split('-');
-                const trackIndex = parseInt(index);
+                // Parse trackId properly for different patterns
+                let type, trackIndex;
+                if (trackId.startsWith('no-match-')) {
+                    type = 'no-match';
+                    trackIndex = parseInt(trackId.substring(9));
+                } else if (trackId.startsWith('uncertain-')) {
+                    type = 'uncertain';
+                    trackIndex = parseInt(trackId.substring(10));
+                } else if (trackId.startsWith('perfect-')) {
+                    type = 'perfect';
+                    trackIndex = parseInt(trackId.substring(8));
+                } else {
+                    console.warn('Unknown trackId pattern:', trackId);
+                    return;
+                }
                 
-                if (type === 'perfect') {
+                // Check if this track has a custom match
+                if (this.customMatches.has(trackId)) {
+                    const customMatch = this.customMatches.get(trackId);
+                    const originalTrack = customMatch.originalTrack;
+                    const customTrack = customMatch.customTrack;
+                    
+                    // Create the appropriate track structure based on sync direction
+                    if (isReverseSync) {
+                        // Spotify to YouTube
+                        approvedTracks.push({
+                            spotifyTrack: originalTrack.spotifyTrack,
+                            youtubeTrack: customTrack,
+                            isCustomMatch: true
+                        });
+                    } else {
+                        // YouTube to Spotify
+                        approvedTracks.push({
+                            youtubeTrack: originalTrack.youtubeTrack,
+                            spotifyTrack: customTrack,
+                            isCustomMatch: true
+                        });
+                    }
+                } else if (type === 'perfect') {
+                    // Normal perfect match case
                     approvedTracks.push(this.currentPreview.perfectMatches[trackIndex]);
                 } else if (type === 'uncertain') {
                     const uncertainTrack = this.currentPreview.uncertainMatches[trackIndex];
-                    if (syncDirection === 'youtube-to-spotify') {
-                        // YouTube to Spotify: use spotifyMatches
-                        if (uncertainTrack.spotifyMatches && uncertainTrack.spotifyMatches.length > 0) {
-                            approvedTracks.push({
-                                youtubeTrack: uncertainTrack.youtubeTrack,
-                                spotifyTrack: uncertainTrack.spotifyMatches[0] // Use best match
-                            });
-                        }
-                    } else if (syncDirection === 'spotify-to-youtube') {
+                    if (isReverseSync) {
                         // Spotify to YouTube: use youtubeMatches  
                         if (uncertainTrack.youtubeMatches && uncertainTrack.youtubeMatches.length > 0) {
                             approvedTracks.push({
@@ -760,7 +990,18 @@ class SpotisyncApp {
                                 youtubeTrack: uncertainTrack.youtubeMatches[0] // Use best match
                             });
                         }
+                    } else {
+                        // YouTube to Spotify: use spotifyMatches  
+                        if (uncertainTrack.spotifyMatches && uncertainTrack.spotifyMatches.length > 0) {
+                            approvedTracks.push({
+                                youtubeTrack: uncertainTrack.youtubeTrack,
+                                spotifyTrack: uncertainTrack.spotifyMatches[0] // Use best match
+                            });
+                        }
                     }
+                } else if (type === 'no-match') {
+                    // This case should be handled by customMatches already
+                    console.log('No-match track selected but not found in customMatches', trackId);
                 }
             });
 
@@ -805,12 +1046,20 @@ class SpotisyncApp {
 
             if (!response.ok) {
                 throw new Error('Failed to execute sync');
+            }            const results = await response.json();
+            console.log('Sync results received:', results);
+            
+            try {
+                this.displayResults(results);
+                console.log('displayResults completed successfully');
+                this.showSection('results-section');
+                console.log('showSection called for results-section');
+            } catch (displayError) {
+                console.error('Error in displayResults:', displayError);
+                this.showToast('Error displaying results: ' + displayError.message, 'error');
             }
-
-            const results = await response.json();
-            this.displayResults(results);
-            this.showSection('results-section');
-            this.hideLoading();        } catch (error) {
+            
+            this.hideLoading();} catch (error) {
             console.error('Error executing sync:', error);
             
             // Check for quota exceeded error
@@ -822,25 +1071,40 @@ class SpotisyncApp {
             
             this.hideLoading();
         }
-    }displayResults(results) {
+    }    displayResults(results) {
         const container = document.getElementById('sync-results');
         
-        const successRate = results.summary.totalApproved > 0 
-            ? Math.round((results.summary.successfullyAdded / results.summary.totalApproved) * 100)
+        // Determine sync direction for proper data handling
+        const syncDirection = document.getElementById('sync-direction').value;
+        const isReverseSync = syncDirection === 'spotify-to-youtube';
+        
+        // For reverse sync (Spotify to YouTube), we might have inconsistencies due to Python/Node integration
+        // Therefore, determine the success count based on tracksAdded length rather than summary
+        let successfullyAdded = results.tracksAdded ? results.tracksAdded.length : results.summary.successfullyAdded;
+        let totalApproved = results.summary.totalApproved;
+        
+        // Calculate success rate based on actual added tracks
+        const successRate = totalApproved > 0 
+            ? Math.round((successfullyAdded / totalApproved) * 100)
             : 0;
             
-        // Calculate total non-transferred tracks count
+        // Get the failed count - use actual tracksFailed length for accuracy
+        const actualFailedCount = results.tracksFailed ? results.tracksFailed.length : results.summary.failed;
+        
+        // Get the non-transferred count directly from the summary for consistency
         const nonTransferredCount = results.summary.nonTransferredCount || 0;
         const hasNonTransferred = nonTransferredCount > 0;
-
-        container.innerHTML = `
+        
+        // For reverse sync, display warning if there's a mismatch between reported and actual counts
+        const shouldShowDiscrepancyWarning = isReverseSync && 
+            (successfullyAdded + actualFailedCount !== totalApproved);        container.innerHTML = `
             <div class="sync-stats">
                 <div class="stat-card stat-perfect">
-                    <div class="stat-number">${results.summary.successfullyAdded}</div>
+                    <div class="stat-number">${successfullyAdded}</div>
                     <div class="stat-label">Tracks Added</div>
                 </div>
                 <div class="stat-card stat-uncertain">
-                    <div class="stat-number">${results.summary.failed}</div>
+                    <div class="stat-number">${actualFailedCount}</div>
                     <div class="stat-label">Failed</div>
                 </div>
                 ${hasNonTransferred ? `
@@ -855,52 +1119,123 @@ class SpotisyncApp {
                 </div>
             </div>
             
-            ${results.summary.successfullyAdded > 0 ? `
+            ${shouldShowDiscrepancyWarning ? `
+            <div class="alert alert-warning" style="margin: 20px 0; padding: 15px; background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; border-radius: 4px;">
+                <strong>Note:</strong> Some tracks may have been added to YouTube Music even though they were reported as failed. 
+                Please check your YouTube Music playlist to confirm the final results.
+                <div style="margin-top: 10px; font-size: 0.9em;">
+                    <span style="font-weight: bold;">Reported counts:</span> ${totalApproved} attempted, ${successfullyAdded} succeeded, ${actualFailedCount} failed
+                </div>
+            </div>
+            ` : ''}${results.summary.successfullyAdded > 0 ? `
                 <div style="margin-top: 24px;">
                     <h3 style="color: #48bb78; margin-bottom: 12px;">✅ Successfully Added Tracks</h3>
-                    <div class="track-list" style="max-height: 200px;">
-                        ${results.tracksAdded.map(track => `
-                            <div class="track-item">
-                                <div class="track-info">
-                                    <div class="track-title">${track.spotifyTrack.name}</div>
-                                    <div class="track-artist">by ${track.spotifyTrack.artists.join(', ')}</div>
+                    <div class="track-list" style="max-height: 200px;">                        ${results.tracksAdded.map(track => {
+                            // Standardized track display for both sync directions
+                            let trackName, trackArtist;
+                            
+                            if (isReverseSync) {
+                                // For reverse sync (Spotify to YouTube), show Spotify track info
+                                trackName = track.spotifyTrack?.name || track.spotifyTrack?.title || 'Unknown Track';
+                                trackArtist = track.spotifyTrack?.artists 
+                                    ? (Array.isArray(track.spotifyTrack.artists) ? track.spotifyTrack.artists.join(', ') : track.spotifyTrack.artists)
+                                    : track.spotifyTrack?.artist || 'Unknown Artist';
+                            } else {
+                                // For original sync (YouTube to Spotify), show Spotify track info
+                                trackName = track.spotifyTrack?.name || track.spotifyTrack?.title || 'Unknown Track';
+                                trackArtist = track.spotifyTrack?.artists 
+                                    ? (Array.isArray(track.spotifyTrack.artists) ? track.spotifyTrack.artists.join(', ') : track.spotifyTrack.artists)
+                                    : track.spotifyTrack?.artist || 'Unknown Artist';
+                            }
+                            
+                            return `
+                                <div class="track-item">
+                                    <div class="track-info">
+                                        <div class="track-title">${trackName}</div>
+                                        <div class="track-artist">by ${trackArtist}</div>
+                                    </div>
+                                    <div class="track-confidence confidence-perfect">Added</div>
                                 </div>
-                                <div class="track-confidence confidence-perfect">Added</div>
-                            </div>
-                        `).join('')}
+                            `;
+                        }).join('')}
                     </div>
                 </div>
             ` : ''}
-            
-            ${results.tracksFailed.length > 0 ? `
+              ${results.tracksFailed && results.tracksFailed.length > 0 ? `
                 <div style="margin-top: 24px;">
                     <h3 style="color: #f56565; margin-bottom: 12px;">❌ Failed Tracks</h3>
-                    <div style="background: #fed7d7; padding: 16px; border-radius: 8px; color: #742a2a;">
-                        ${results.tracksFailed.map(failure => failure.error).join('<br>')}
+                    <div class="track-list track-list-non-transferred">                        ${results.tracksFailed.map(failure => {
+                            // Standardized failed track display for both sync directions
+                            let trackName, trackArtist, errorMessage;
+                            
+                            if (isReverseSync) {
+                                // For reverse sync, show source (Spotify) track info
+                                trackName = failure.spotifyTrack?.name || failure.spotifyTrack?.title || 'Unknown Track';
+                                trackArtist = failure.spotifyTrack?.artists 
+                                    ? (Array.isArray(failure.spotifyTrack.artists) ? failure.spotifyTrack.artists.join(', ') : failure.spotifyTrack.artists)
+                                    : failure.spotifyTrack?.artist || 'Unknown Artist';
+                                errorMessage = failure.error || 'Failed to add to YouTube Music';
+                            } else {
+                                // For original sync, show source (YouTube) track info
+                                trackName = failure.youtubeTrack?.title || failure.track?.youtubeTrack?.title || 'Unknown Track';
+                                trackArtist = failure.youtubeTrack?.artist || failure.track?.youtubeTrack?.artist || 'Unknown Artist';
+                                errorMessage = failure.error || 'Failed to add to Spotify';
+                            }
+                            
+                            return `
+                                <div class="track-item">
+                                    <div class="track-info">
+                                        <div class="track-title">${trackName}</div>
+                                        <div class="track-artist">by ${trackArtist}</div>
+                                        <div class="track-reason">${errorMessage}</div>
+                                    </div>
+                                    <div class="track-confidence confidence-poor">Transfer Failed</div>
+                                </div>
+                            `;
+                        }).join('')}
                     </div>
                 </div>
             ` : ''}
             
-            <!-- Display non-transferred tracks -->
-            ${results.nonTransferred ? `                <!-- Display unmatched tracks -->
+            <!-- Display non-transferred tracks -->            ${results.nonTransferred ? `                <!-- Display unmatched tracks -->
                 ${results.nonTransferred.unmatchedTracks && results.nonTransferred.unmatchedTracks.length > 0 ? `
                     <div style="margin-top: 24px;">                        <h3 style="color: #ed8936; margin-bottom: 12px;"><i class="fas fa-search"></i> Unmatched Tracks</h3>
                         <div class="track-list track-list-non-transferred">                            ${results.nonTransferred.unmatchedTracks.map(track => {
-                                const youtubeInfo = (track.youtubeTrack && (track.youtubeTrack.rawTitle || track.youtubeTrack.channelTitle)) ? `
-                                    <div class="youtube-info" style="margin-top: 6px; padding: 6px; background: #f7fafc; border-radius: 4px; border-left: 2px solid #ff0000;">
-                                        ${track.youtubeTrack.rawTitle ? `<div style="font-size: 0.8rem; color: #4a5568; margin-bottom: 1px;"><strong>YouTube:</strong> ${track.youtubeTrack.rawTitle}</div>` : ''}
-                                        ${track.youtubeTrack.channelTitle ? `<div style="font-size: 0.8rem; color: #718096;"><strong>Channel:</strong> ${track.youtubeTrack.channelTitle}</div>` : ''}
-                                    </div>
-                                ` : '';
+                                let trackTitle, trackArtist, trackReason;
+                                let trackSourceInfo = '';
+                                
+                                if (isReverseSync) {
+                                    // For reverse sync, show Spotify track info
+                                    trackTitle = track.spotifyTrack?.name || track.spotifyTrack?.title || 'Unknown Track';
+                                    trackArtist = track.spotifyTrack?.artists 
+                                        ? (Array.isArray(track.spotifyTrack.artists) ? track.spotifyTrack.artists.join(', ') : track.spotifyTrack.artists)
+                                        : track.spotifyTrack?.artist || 'Unknown Artist';
+                                    trackReason = track.reason || 'No match found on YouTube Music';
+                                } else {
+                                    // For forward sync, show YouTube track info
+                                    trackTitle = track.youtubeTrack?.title || 'Unknown Track';
+                                    trackArtist = track.youtubeTrack?.artist || 'Unknown Artist';
+                                    trackReason = track.reason || 'No match found on Spotify';
+                                    
+                                    // Add YouTube specific info for forward sync
+                                    if (track.youtubeTrack && (track.youtubeTrack.rawTitle || track.youtubeTrack.channelTitle)) {
+                                        trackSourceInfo = `
+                                            <div class="youtube-info" style="margin-top: 6px; padding: 6px; background: #f7fafc; border-radius: 4px; border-left: 2px solid #ff0000;">
+                                                ${track.youtubeTrack.rawTitle ? `<div style="font-size: 0.8rem; color: #4a5568; margin-bottom: 1px;"><strong>YouTube:</strong> ${track.youtubeTrack.rawTitle}</div>` : ''}
+                                                ${track.youtubeTrack.channelTitle ? `<div style="font-size: 0.8rem; color: #718096;"><strong>Channel:</strong> ${track.youtubeTrack.channelTitle}</div>` : ''}
+                                            </div>
+                                        `;
+                                    }
+                                }
                                 
                                 return `
                                     <div class="track-item">
                                         <div class="track-info">
-                                            <div class="track-title">${track.youtubeTrack.title}</div>
-                                            <div class="track-artist">by ${track.youtubeTrack.artist}</div>
-                                            <div class="track-reason">${track.reason || 'No match found on Spotify'}</div>
-                                            ${youtubeInfo}
-                                            <div class="track-help">Try searching manually on Spotify with alternate spellings or by album name</div>
+                                            <div class="track-title">${trackTitle}</div>
+                                            <div class="track-artist">by ${trackArtist}</div>
+                                            <div class="track-reason">${trackReason}</div>
+                                            ${trackSourceInfo}
+                                            <div class="track-help">Try searching manually with alternate spellings or by album name</div>
                                         </div>
                                         <div class="track-confidence confidence-poor">Not Found</div>
                                     </div>
@@ -908,29 +1243,57 @@ class SpotisyncApp {
                             }).join('')}
                         </div>
                     </div>
-                ` : ''}
-                  <!-- Display unapproved tracks -->
+                ` : ''}                <!-- Display unapproved tracks -->
                 ${results.nonTransferred.unapprovedTracks && results.nonTransferred.unapprovedTracks.length > 0 ? `
                     <div style="margin-top: 24px;">                        <h3 style="color: #ed8936; margin-bottom: 12px;"><i class="fas fa-question-circle"></i> Unapproved Tracks</h3>
                         <div class="track-list track-list-non-transferred">                            ${results.nonTransferred.unapprovedTracks.map(track => {
-                                const youtubeInfo = (track.youtubeTrack && (track.youtubeTrack.rawTitle || track.youtubeTrack.channelTitle)) ? `
-                                    <div class="youtube-info" style="margin-top: 6px; padding: 6px; background: #f7fafc; border-radius: 4px; border-left: 2px solid #ff0000;">
-                                        ${track.youtubeTrack.rawTitle ? `<div style="font-size: 0.8rem; color: #4a5568; margin-bottom: 1px;"><strong>YouTube:</strong> ${track.youtubeTrack.rawTitle}</div>` : ''}
-                                        ${track.youtubeTrack.channelTitle ? `<div style="font-size: 0.8rem; color: #718096;"><strong>Channel:</strong> ${track.youtubeTrack.channelTitle}</div>` : ''}
-                                    </div>
-                                ` : '';
+                                let trackTitle, trackArtist, trackReason;
+                                let trackSourceInfo = '';
+                                let matchInfo = '';
+                                
+                                if (isReverseSync) {
+                                    // For reverse sync, show Spotify track info and potential YouTube matches
+                                    trackTitle = track.spotifyTrack?.name || track.spotifyTrack?.title || 'Unknown Track';
+                                    trackArtist = track.spotifyTrack?.artists 
+                                        ? (Array.isArray(track.spotifyTrack.artists) ? track.spotifyTrack.artists.join(', ') : track.spotifyTrack.artists)
+                                        : track.spotifyTrack?.artist || 'Unknown Artist';
+                                    trackReason = track.reason || 'Track required manual approval';
+                                    
+                                    // Show YouTube matches if available
+                                    if (track.youtubeMatches && track.youtubeMatches.length > 0) {
+                                        matchInfo = `<div class="possible-match">Best match: "${track.youtubeMatches[0].title}" by ${track.youtubeMatches[0].artist}</div>`;
+                                    }
+                                } else {
+                                    // For forward sync, show YouTube track info and potential Spotify matches
+                                    trackTitle = track.youtubeTrack?.title || 'Unknown Track';
+                                    trackArtist = track.youtubeTrack?.artist || 'Unknown Artist';
+                                    trackReason = track.reason || 'Track required manual approval';
+                                    
+                                    // Add YouTube specific info for forward sync
+                                    if (track.youtubeTrack && (track.youtubeTrack.rawTitle || track.youtubeTrack.channelTitle)) {
+                                        trackSourceInfo = `
+                                            <div class="youtube-info" style="margin-top: 6px; padding: 6px; background: #f7fafc; border-radius: 4px; border-left: 2px solid #ff0000;">
+                                                ${track.youtubeTrack.rawTitle ? `<div style="font-size: 0.8rem; color: #4a5568; margin-bottom: 1px;"><strong>YouTube:</strong> ${track.youtubeTrack.rawTitle}</div>` : ''}
+                                                ${track.youtubeTrack.channelTitle ? `<div style="font-size: 0.8rem; color: #718096;"><strong>Channel:</strong> ${track.youtubeTrack.channelTitle}</div>` : ''}
+                                            </div>
+                                        `;
+                                    }
+                                    
+                                    // Show Spotify matches if available
+                                    if (track.spotifyMatches && track.spotifyMatches.length > 0) {
+                                        matchInfo = `<div class="possible-match">Best match: "${track.spotifyMatches[0].name}" by ${track.spotifyMatches[0].artists.join(', ')}</div>`;
+                                    }
+                                }
                                 
                                 return `
                                     <div class="track-item">
                                         <div class="track-info">
-                                            <div class="track-title">${track.youtubeTrack.title}</div>
-                                            <div class="track-artist">by ${track.youtubeTrack.artist}</div>
-                                            <div class="track-reason">${track.reason || 'Track required manual approval'}</div>
-                                            ${youtubeInfo}
+                                            <div class="track-title">${trackTitle}</div>
+                                            <div class="track-artist">by ${trackArtist}</div>
+                                            <div class="track-reason">${trackReason}</div>
+                                            ${trackSourceInfo}
                                             <div class="track-matches">
-                                                ${track.spotifyMatches && track.spotifyMatches.length > 0 ? 
-                                                    `<div class="possible-match">Best match: "${track.spotifyMatches[0].name}" by ${track.spotifyMatches[0].artists.join(', ')}</div>` 
-                                                    : ''}
+                                                ${matchInfo}
                                             </div>
                                         </div>
                                         <div class="track-confidence confidence-uncertain">Not Approved</div>
@@ -938,23 +1301,38 @@ class SpotisyncApp {
                                 `;
                             }).join('')}
                         </div>
-                    </div>
-                ` : ''}
-                
-                <!-- Display failed tracks -->
+                    </div>                ` : ''}                <!-- Display failed tracks from execution failures for both sync directions -->
                 ${results.nonTransferred.failedTracks && results.nonTransferred.failedTracks.length > 0 ? `
                     <div style="margin-top: 24px;">                        <h3 style="color: #f56565; margin-bottom: 12px;"><i class="fas fa-exclamation-circle"></i> Failed to Transfer</h3>
                         <div class="track-list track-list-non-transferred">
-                            ${results.nonTransferred.failedTracks.map(track => `
-                                <div class="track-item">
-                                    <div class="track-info">
-                                        <div class="track-title">${track.youtubeTrack?.title || track.title || 'Unknown Track'}</div>
-                                        <div class="track-artist">by ${track.youtubeTrack?.artist || track.artist || 'Unknown Artist'}</div>
-                                        <div class="track-reason">${track.error || 'Transfer failed - check Spotify API limits'}</div>
+                            ${results.nonTransferred.failedTracks.map(track => {
+                                let trackTitle, trackArtist, errorMessage;
+                                
+                                if (isReverseSync) {
+                                    // For reverse sync, show Spotify track info
+                                    trackTitle = track.spotifyTrack?.name || track.spotifyTrack?.title || track.title || 'Unknown Track';
+                                    trackArtist = track.spotifyTrack?.artists 
+                                        ? (Array.isArray(track.spotifyTrack.artists) ? track.spotifyTrack.artists.join(', ') : track.spotifyTrack.artists)
+                                        : track.spotifyTrack?.artist || track.artist || 'Unknown Artist';
+                                    errorMessage = track.error || 'Transfer failed - check YouTube Music API';
+                                } else {
+                                    // For forward sync, show YouTube track info
+                                    trackTitle = track.youtubeTrack?.title || track.title || 'Unknown Track';
+                                    trackArtist = track.youtubeTrack?.artist || track.artist || 'Unknown Artist';
+                                    errorMessage = track.error || 'Transfer failed - check Spotify API limits';
+                                }
+                                
+                                return `
+                                    <div class="track-item">
+                                        <div class="track-info">
+                                            <div class="track-title">${trackTitle}</div>
+                                            <div class="track-artist">by ${trackArtist}</div>
+                                            <div class="track-reason">${errorMessage}</div>
+                                        </div>
+                                        <div class="track-confidence confidence-poor">Transfer Failed</div>
                                     </div>
-                                    <div class="track-confidence confidence-poor">Transfer Failed</div>
-                                </div>
-                            `).join('')}
+                                `;
+                            }).join('')}
                         </div>
                     </div>
                 ` : ''}
@@ -1099,9 +1477,7 @@ class SpotisyncApp {
         }
         
         loadingOverlay.style.display = 'none';
-    }
-
-    showToast(message, type = 'info') {
+    }    showToast(message, type = 'info', duration = 5000) {
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
         toast.textContent = message;
@@ -1110,12 +1486,11 @@ class SpotisyncApp {
 
         setTimeout(() => {
             toast.remove();
-        }, 5000);
-    }
-
-    resetApp() {
+        }, duration);
+    }    resetApp() {
         this.currentPreview = null;
         this.selectedTracks.clear();
+        this.customMatches.clear(); // Clear custom matches
         
         // Reset form fields
         document.getElementById('youtube-playlist').value = '';
@@ -1128,6 +1503,152 @@ class SpotisyncApp {
         
         // Show playlist selection
         this.showSection('playlist-section');
+    }    async applyCustomMatch(trackId, customMatchValue) {
+        // Parse trackId properly for "no-match" and "uncertain" patterns
+        let type, trackIndex;
+        if (trackId.startsWith('no-match-')) {
+            type = 'no-match';
+            trackIndex = parseInt(trackId.substring(9)); // Remove "no-match-" prefix
+        } else if (trackId.startsWith('uncertain-')) {
+            type = 'uncertain';
+            trackIndex = parseInt(trackId.substring(10)); // Remove "uncertain-" prefix
+        } else {
+            console.error('Invalid trackId pattern:', trackId);
+            this.showToast('Invalid track ID', 'error');
+            return false;
+        }
+        
+        const track = this.currentPreview[type === 'no-match' ? 'noMatches' : 'uncertainMatches'][trackIndex];
+        const syncDirection = document.getElementById('sync-direction').value;
+        const isReverseSync = syncDirection === 'spotify-to-youtube';
+        
+        // Validate input
+        if (!customMatchValue || customMatchValue.trim() === '') {
+            this.showToast('Please enter a valid custom match link', 'error');
+            return false;
+        }        // Validate track structure
+        if (!track) {
+            console.error('Track not found:', trackId, type, trackIndex);
+            this.showToast('Track data not found', 'error');
+            return false;
+        }
+
+        console.log('Track structure for custom match:', { type, track, isReverseSync });
+
+        try {
+            this.showLoading('Verifying custom match...');
+            
+            // Normalize the input value
+            let cleanValue = customMatchValue.trim();
+            
+            // Make an API call to verify the link and get full track info
+            let endpoint, requestBody;
+            
+            // Handle different track structures for no-match vs uncertain tracks
+            let sourceTrack;
+            
+            // For both no-match and uncertain tracks, the structure is the same
+            // no-match: { youtubeTrack: trackInfo, reason: '...' } or { spotifyTrack: trackInfo, reason: '...' }
+            // uncertain: { youtubeTrack: trackInfo, spotifyMatches: [...], reason: '...' } or { spotifyTrack: trackInfo, youtubeMatches: [...], reason: '...' }
+            sourceTrack = isReverseSync ? track.spotifyTrack : track.youtubeTrack;
+            
+            if (!sourceTrack) {
+                console.error('Source track not found in track object:', track);
+                const expectedProperty = isReverseSync ? 'spotifyTrack' : 'youtubeTrack';
+                this.showToast(`Missing ${expectedProperty} in track data`, 'error');
+                return false;
+            }
+            
+            if (isReverseSync) {
+                // Verifying YouTube link for Spotify track
+                endpoint = '/api/youtube/verify-link';
+                requestBody = {
+                    link: cleanValue,
+                    sourceTrackName: sourceTrack.name || sourceTrack.title,
+                    sourceTrackArtist: sourceTrack.artists && Array.isArray(sourceTrack.artists) 
+                        ? sourceTrack.artists.join(', ') 
+                        : sourceTrack.artist
+                };
+            } else {
+                // Verifying Spotify link for YouTube track
+                endpoint = '/api/spotify/verify-link';
+                requestBody = {
+                    link: cleanValue,
+                    sourceTrackName: sourceTrack.title,
+                    sourceTrackArtist: sourceTrack.artist
+                };
+            }
+            
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                this.hideLoading();
+                const errorData = await response.json();
+                this.showToast(`Error verifying link: ${errorData.error || 'Unknown error'}`, 'error');
+                return false;
+            }
+            
+            const verifiedTrack = await response.json();
+            
+            // Store the custom match
+            this.customMatches.set(trackId, {
+                originalTrack: track,
+                customTrack: verifiedTrack,
+                type: type
+            });
+            
+            // Add to selected tracks
+            this.selectedTracks.add(trackId);
+              // Update UI
+            const trackElement = document.querySelector(`[data-type="${type}"][data-index="${trackIndex}"]`);
+            const input = trackElement.querySelector('.manual-match-input');
+            const button = trackElement.querySelector('.manual-match-btn');
+            const matchContainer = trackElement.querySelector('.manual-match-container');
+            
+            button.textContent = 'Custom Match Applied';
+            button.className = 'action-btn action-approved';
+            button.style.background = '#48bb78';
+            button.disabled = true;
+            input.disabled = true;
+            
+            // Add matched track info display
+            const matchInfoDiv = document.createElement('div');
+            matchInfoDiv.className = 'custom-match-info';
+            matchInfoDiv.style.marginTop = '8px';
+            matchInfoDiv.style.padding = '8px';
+            matchInfoDiv.style.backgroundColor = '#ebf8ff';
+            matchInfoDiv.style.borderRadius = '4px';
+            matchInfoDiv.style.borderLeft = '3px solid #4299e1';
+            
+            const matchType = isReverseSync ? 'YouTube' : 'Spotify';
+            const matchTitle = isReverseSync ? verifiedTrack.title : verifiedTrack.name;
+            const matchArtist = isReverseSync 
+                ? verifiedTrack.artist 
+                : (Array.isArray(verifiedTrack.artists) ? verifiedTrack.artists.join(', ') : verifiedTrack.artist);
+            
+            matchInfoDiv.innerHTML = `
+                <div style="font-weight: 600; margin-bottom: 4px;">Custom ${matchType} Match:</div>
+                <div style="font-size: 0.9rem;"><strong>${matchTitle}</strong> by ${matchArtist}</div>
+            `;
+            
+            matchContainer.appendChild(matchInfoDiv);
+            
+            this.updateExecuteButton();
+            this.hideLoading();
+            this.showToast('Custom match applied successfully', 'success');
+            return true;
+        } catch (error) {
+            console.error('Error applying custom match:', error);
+            this.hideLoading();
+            this.showToast('Failed to apply custom match: ' + error.message, 'error');
+            return false;
+        }
     }
 }
 

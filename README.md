@@ -1,96 +1,218 @@
-# Spotisync - Bidirectional Playlist Sync
+# Spotisync
 
-A tool that syncs playlists between YouTube Music and Spotify in both directions with precision matching and manual review capabilities.
+**Seamlessly sync your Spotify playlists to YouTube Music with cookie-based authentication.**
 
-## Features
+Spotisync is a web application that allows you to transfer your favorite Spotify playlists to YouTube Music without dealing with complex OAuth flows or API quotas. Simply authenticate with cookies and start syncing!
 
-- **Bidirectional Sync**: Sync from YouTube Music → Spotify OR Spotify → YouTube Music
-- **Artist Topic Channel Priority**: Prioritizes official artist channels when searching YouTube
-- **Precise Matching**: Only syncs songs with exact artist and song name matches
-- **Manual Review**: Flags uncertain matches for manual vetting
-- **Duplicate Prevention**: Avoids adding duplicate songs to playlists
-- **Safe Operations**: Never deletes songs without explicit permission
-- **Playlist Creation**: Automatically creates new playlists if they don't exist
-- **Quota-Aware Error Handling**: Gracefully handles YouTube API quota limits
-- **Web Interface**: Easy-to-use browser-based interface with dynamic sync direction selection
+## ✨ Features
 
-## Setup
+- 🎵 **Playlist Synchronization**: Transfer entire Spotify playlists to YouTube Music
+- 🔐 **Cookie-Based Authentication**: No complex OAuth setup required
+- 🚀 **No API Quotas**: Bypass YouTube Music API limitations
+- 🎯 **Smart Matching**: Intelligent track matching between platforms
+- 🌐 **Web Interface**: Easy-to-use web-based interface
+- ⚡ **Fast Sync**: Efficient batch processing for large playlists
 
-1. **Install Dependencies**
+## 🚀 Quick Start
+
+### Interactive Setup (Recommended)
+
+Run our automated setup script for the easiest experience:
+
+```bash
+npm run setup
+```
+
+This will guide you through the entire setup process automatically.
+
+### Manual Setup
+
+### Prerequisites
+
+- Node.js (v14 or higher)
+- npm or yarn
+- Python (for YouTube Music authentication)
+- Spotify Developer Account
+- YouTube Music account with existing playlists
+
+### Manual Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd Spotisync
+   ```
+
+2. **Install dependencies**
    ```bash
    npm install
    ```
 
-2. **Configure API Credentials**
-   - Create a Spotify App at [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-   - Set up YouTube Data API v3 access at [Google Cloud Console](https://console.cloud.google.com/)
-   - Copy `.env.example` to `.env` and fill in your credentials
-   - See `GOOGLE_SETUP.md` for detailed YouTube API setup instructions
-
-3. **Run the Application**
+3. **Environment Setup**
    ```bash
-   npm run dev
+   cp .env.example .env
+   ```
+   
+   Edit `.env` with your Spotify credentials:
+   ```env
+   SPOTIFY_CLIENT_ID=your_spotify_client_id
+   SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+   SPOTIFY_REDIRECT_URI=http://localhost:3000/callback
+   PORT=3000
    ```
 
-4. **Open Browser**
-   Navigate to `http://localhost:3000`
+4. **YouTube Music Authentication**
+   
+   Set up YouTube Music authentication using our custom setup script:
+   ```bash
+   pip install -r requirements.txt
+   python scripts/setup-ytmusic.py
+   ```
+   
+   Follow the interactive prompts to extract headers from your browser and generate the `oauth.json` file.
 
-## Configuration
+5. **Start the application**
+   ```bash
+   npm run start:all
+   ```
 
-Create a `.env` file with the following:
+6. **Open your browser**
+   
+   Navigate to `http://localhost:3000` and start syncing!
 
-```env
-SPOTIFY_CLIENT_ID=your_spotify_client_id
-SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
-SPOTIFY_REDIRECT_URI=http://localhost:3000/callback
+## 🔧 Configuration
 
-YOUTUBE_CLIENT_ID=your_google_oauth_client_id
-YOUTUBE_CLIENT_SECRET=your_google_oauth_client_secret
-YOUTUBE_REDIRECT_URI=http://localhost:3000/auth/youtube/callback
+### Spotify Setup
 
-PORT=3000
+1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+2. Create a new app
+3. Add `http://localhost:3000/callback` to redirect URIs
+4. Copy Client ID and Client Secret to your `.env` file
+
+### YouTube Music Setup
+
+The application uses header-based authentication for YouTube Music. You'll need to:
+
+1. Install the Python dependencies: `pip install -r requirements.txt`
+2. Run our setup script: `python scripts/setup-ytmusic.py`
+3. Follow the interactive prompts to extract headers from your browser
+4. The script will generate the required `oauth.json` file automatically
+
+## 📁 Project Structure
+
+```
+Spotisync/
+├── src/
+│   ├── app.js                          # Main application server
+│   ├── services/
+│   │   ├── spotifyServices.js          # Spotify API integration
+│   │   ├── syncService.js              # Playlist synchronization logic
+│   │   ├── youtubeMusicService.js      # YouTube Music API service
+│   │   └── youtubeMusicServiceFactory.js # YouTube Music API factory
+│   └── utils/
+│       └── index.js                    # Utility functions
+├── public/
+│   ├── index.html                      # Main web interface
+│   ├── script.js                       # Frontend JavaScript
+│   └── styles.css                      # Application styles
+├── scripts/
+│   ├── refresh-cookies.js              # Cookie refresh utility
+│   └── setup-ytmusic.py                # YouTube Music setup script
+├── .env.example                        # Environment template
+├── requirements.txt                    # Python dependencies
+├── package.json                        # Node.js dependencies and scripts
+├── README.md                           # This file
+└── SETUP.md                            # Detailed setup instructions
 ```
 
-## Usage
+## 🎯 How It Works
 
-1. Authenticate with both Spotify and YouTube Music
-2. **Select sync direction**: Choose between YouTube Music → Spotify or Spotify → YouTube Music
-3. Select source playlist from the chosen platform
-4. Choose or create destination playlist on the target platform
-5. Review matching results and artist topic channel prioritization
-6. Approve precise matches for sync
-7. Manually review flagged items
+1. **Spotify Authentication**: Uses OAuth 2.0 to access your Spotify playlists
+2. **YouTube Music Authentication**: Uses browser headers to bypass API limitations
+3. **Track Matching**: Searches YouTube Music for equivalent tracks
+4. **Playlist Creation**: Creates new playlists or updates existing ones
+5. **Sync Status**: Provides real-time feedback on the sync process
 
-## API Endpoints
+## 🛠️ API Reference
 
-### Core Interface
-- `GET /` - Main web interface
+### Spotify Integration
+- Uses `spotify-web-api-node` for Spotify Web API access
+- Supports playlist retrieval and track listing
+- Handles OAuth 2.0 authentication flow
 
-### Authentication
-- `POST /auth/spotify` - Spotify authentication
-- `POST /auth/youtube` - YouTube Music authentication
+### YouTube Music Integration
+- Uses `ytmusicapi` for header-based authentication
+- Supports playlist creation, modification, and track addition
+- No API quotas or rate limits
 
-### Sync Operations
-- `POST /api/sync/preview` - Preview YouTube Music → Spotify sync
-- `POST /api/sync/execute` - Execute YouTube Music → Spotify sync
-- `POST /api/sync/preview-reverse` - Preview Spotify → YouTube Music sync
-- `POST /api/sync/execute-reverse` - Execute Spotify → YouTube Music sync
+## 🔒 Security
 
-### Playlist Management
-- `GET /api/spotify/playlists` - Get Spotify playlists
-- `GET /api/spotify/playlists/:id` - Get specific Spotify playlist
-- `GET /api/youtube/playlists` - Get YouTube Music playlists
+- All authentication tokens are stored locally
+- No user data is transmitted to external servers
+- Spotify tokens are handled securely via OAuth 2.0
+- YouTube Music headers are used only for API access
 
-## Quota Management
+## 🐛 Troubleshooting
 
-The application includes comprehensive YouTube API quota management. If you encounter quota exceeded errors:
+### Common Issues
 
-1. **Daily quotas reset** at midnight Pacific Time
-2. **Request quota increase** through Google Cloud Console for heavy usage
-3. **Monitor usage** - the app will show quota status and handle errors gracefully
+**"YouTube Music authentication failed"**
+- Ensure your `oauth.json` file is in the project root
+- Try regenerating headers with `python scripts/setup-ytmusic.py`
 
-See `QUOTA_MANAGEMENT.md` for detailed information on managing YouTube API quotas.
+**"Spotify authentication error"**
+- Check your Spotify credentials in `.env`
+- Verify redirect URI in Spotify Developer Dashboard
 
-## License
+**"Track not found on YouTube Music"**
+- Some tracks may not be available on YouTube Music
+- The sync will continue with available tracks
 
-MIT
+### Getting Help
+
+If you encounter issues:
+1. Check the console logs for detailed error messages
+2. Verify all authentication files are correctly placed
+3. Ensure all dependencies are installed
+4. Open an issue on GitHub with error details
+
+## 🔧 Managing YouTube Music Authentication
+
+### Header Expiration Issues
+
+YouTube Music authentication headers typically expire after a period of time, which can interrupt your sync process. Spotisync includes features to help manage this.
+
+### Solutions for Authentication Expiration
+
+1. **Fresh Authentication Setup**
+   
+   If you're experiencing authentication issues, regenerate your headers:
+
+   ```bash
+   python scripts/setup-ytmusic.py
+   ```
+
+   Follow the prompts to extract fresh headers from your browser.
+
+2. **Manual Refresh Using Legacy Script**
+   
+   For backward compatibility, you can still use the cookie refresh script:
+
+   ```bash
+   node scripts/refresh-cookies.js
+   ```
+
+### Improved Playlist Support
+
+- Spotisync now supports playlists with **more than 200 songs**
+- For very large playlists, the app uses continuation tokens to paginate through all tracks
+
+## 🙏 Acknowledgments
+
+- [spotify-web-api-node](https://github.com/thelinmichael/spotify-web-api-node) - Spotify Web API wrapper
+- [ytmusicapi](https://github.com/sigma67/ytmusicapi) - YouTube Music API wrapper
+- [youtube-music-ts-api](https://github.com/nickfthedev/youtube-music-ts-api) - Additional YouTube Music API functionality
+
+## 📄 License
+
+This project is licensed under the MIT License.

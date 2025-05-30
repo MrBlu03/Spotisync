@@ -361,38 +361,74 @@ class SyncService {
             console.log('Fetching existing playlist tracks...');
             const existingTracks = await this.spotify.getPlaylistTracks(targetPlaylistId);
             const existingUris = new Set(existingTracks.map(track => track.uri));
-            console.log(`Found ${existingTracks.length} existing tracks in playlist`);
-
-            // Process approved tracks
+            console.log(`Found ${existingTracks.length} existing tracks in playlist`);            // Process approved tracks
             const tracksToAdd = [];
             
             for (const approvedTrack of approvedTracks) {
                 try {
-                    // Validate track structure
-                    if (!approvedTrack || !approvedTrack.spotifyTrack) {
-                        console.warn('Invalid track structure:', approvedTrack);
+                    // Validate track structure more thoroughly
+                    if (!approvedTrack) {
+                        console.warn('Null or undefined approved track, skipping');
+                        continue;
+                    }
+                    
+                    if (!approvedTrack.spotifyTrack) {
+                        console.warn('Missing spotifyTrack in approved track:', approvedTrack);
+                        const failedTrack = {
+                            error: 'Missing Spotify track data',
+                            track: approvedTrack
+                        };
+                        results.tracksFailed.push(failedTrack);
+                        results.nonTransferred.failedTracks.push(approvedTrack);
+                        results.summary.nonTransferredCount++;
                         continue;
                     }
 
                     const spotifyTrack = approvedTrack.spotifyTrack;
                     
                     // Validate spotify track has required properties
-                    if (!spotifyTrack.uri || !spotifyTrack.name) {
-                        console.warn('Invalid Spotify track structure:', spotifyTrack);
+                    if (!spotifyTrack.uri) {
+                        console.warn('Missing URI in Spotify track:', spotifyTrack);
+                        const failedTrack = {
+                            error: 'Missing Spotify track URI',
+                            track: approvedTrack
+                        };
+                        results.tracksFailed.push(failedTrack);
+                        results.nonTransferred.failedTracks.push(approvedTrack);
+                        results.summary.nonTransferredCount++;
                         continue;
+                    }
+                    
+                    if (!spotifyTrack.name) {
+                        console.warn('Missing name in Spotify track:', spotifyTrack);
+                        const failedTrack = {
+                            error: 'Missing Spotify track name',
+                            track: approvedTrack
+                        };
+                        results.tracksFailed.push(failedTrack);
+                        results.nonTransferred.failedTracks.push(approvedTrack);
+                        results.summary.nonTransferredCount++;
+                        continue;
+                    }
+                    
+                    // Ensure artists array exists and has proper format
+                    if (!spotifyTrack.artists || !Array.isArray(spotifyTrack.artists)) {
+                        console.warn('Invalid artists array in Spotify track:', spotifyTrack);
+                        // Try to fix it by providing a default
+                        spotifyTrack.artists = ['Unknown Artist'];
                     }
                     
                     // Check if track is already in playlist
                     if (existingUris.has(spotifyTrack.uri)) {
-                        console.log(`Skipping duplicate: ${spotifyTrack.name} by ${spotifyTrack.artists?.join(', ') || 'Unknown'}`);
+                        console.log(`Skipping duplicate: ${spotifyTrack.name} by ${spotifyTrack.artists.join(', ')}`);
                         continue;
                     }
                     
                     tracksToAdd.push(spotifyTrack.uri);
                     results.tracksAdded.push({
-                        youtubeTrack: approvedTrack.youtubeTrack,
+                        youtubeTrack: approvedTrack.youtubeTrack || { title: 'Unknown', artist: 'Unknown' },
                         spotifyTrack: spotifyTrack
-                    });                } catch (trackError) {
+                    });} catch (trackError) {
                     console.error('Error processing track:', trackError, approvedTrack);
                     const failedTrack = {
                         error: `Failed to process track: ${trackError.message}`,
@@ -645,18 +681,18 @@ class SyncService {
         else if (spotifyMatch.confidence === 'good') score += 5;
         
         return score;
-    }
-
-    // New method for reverse sync preview (Spotify to YouTube Music)
+    }    // Rebuild: Clean reverse sync preview (Spotify to YouTube Music)
     async previewReverseSync(spotifyPlaylistId, youtubePlaylistId, progressCallback = null) {
         try {
-            console.log(`Previewing reverse sync from Spotify playlist ${spotifyPlaylistId} to YouTube playlist ${youtubePlaylistId}`);
+            console.log(`🔄 Starting reverse sync preview: Spotify playlist ${spotifyPlaylistId} → YouTube playlist ${youtubePlaylistId}`);
 
             // Get tracks from both playlists
             const [spotifyTracks, youtubeTracks] = await Promise.all([
                 this.spotify.getPlaylistTracks(spotifyPlaylistId),
                 youtubePlaylistId ? this.youtubeMusic.getPlaylistTracks(youtubePlaylistId) : []
             ]);
+
+            console.log(`📊 Found ${spotifyTracks.length} Spotify tracks and ${youtubeTracks.length} YouTube tracks`);
 
             if (progressCallback) {
                 progressCallback({
@@ -665,12 +701,7 @@ class SyncService {
                     current: 0,
                     total: spotifyTracks.length,
                     percentage: 0,
-                    stats: {
-                        processed: 0,
-                        total: spotifyTracks.length,
-                        matches: 0,
-                        duplicates: 0
-                    }
+                    stats: { processed: 0, total: spotifyTracks.length, matches: 0, duplicates: 0 }
                 });
             }
 
@@ -692,15 +723,19 @@ class SyncService {
             // Process each Spotify track
             for (let i = 0; i < spotifyTracks.length; i++) {
                 const spotifyTrack = spotifyTracks[i];
+                
+                // Create normalized track info
                 const trackInfo = {
-                    title: spotifyTrack.name,
-                    artist: spotifyTrack.artists.join(', '),
-                    album: spotifyTrack.album,
+                    name: spotifyTrack.name,
+                    title: spotifyTrack.name, // For compatibility
+                    artist: spotifyTrack.artists.map(a => a.name || a).join(', '),
+                    artists: spotifyTrack.artists.map(a => a.name || a),
+                    album: spotifyTrack.album?.name || 'Unknown Album',
                     duration: spotifyTrack.duration_ms,
                     uri: spotifyTrack.uri,
                     id: spotifyTrack.id
                 };
-                
+
                 const percentage = Math.round(((i + 1) / spotifyTracks.length) * 100);
                 
                 if (progressCallback) {
@@ -719,13 +754,13 @@ class SyncService {
                     });
                 }
                 
-                console.log(`\n🔍 Processing ${i + 1}/${spotifyTracks.length} (${percentage}%): "${trackInfo.title}" by "${trackInfo.artist}"`);
+                console.log(`🔍 Processing ${i + 1}/${spotifyTracks.length}: "${trackInfo.title}" by "${trackInfo.artist}"`);
                 
                 // Check if track already exists in destination YouTube playlist
                 const existingTrack = this.findExistingYouTubeTrack(trackInfo, youtubeTracks);
                 
                 if (existingTrack) {
-                    console.log(`✅ Found existing track: "${existingTrack.title}" by "${existingTrack.artist}"`);
+                    console.log(`✅ Already exists: "${existingTrack.title}" by "${existingTrack.artist}"`);
                     results.duplicates.push({
                         spotifyTrack: trackInfo,
                         youtubeTrack: existingTrack,
@@ -739,63 +774,78 @@ class SyncService {
                 const youtubeMatches = await this.youtubeMusic.searchTrackWithArtistPriority(trackInfo.title, trackInfo.artist);
                 
                 if (youtubeMatches.length === 0) {
-                    console.log(`❌ No matches found on YouTube Music`);
+                    console.log(`❌ No YouTube matches found`);
                     results.noMatches.push({
                         spotifyTrack: trackInfo,
                         reason: 'No suitable matches found on YouTube Music'
                     });
                     results.summary.noMatchCount++;
-                } else if (youtubeMatches.length === 1) {
-                    console.log(`🎯 Single match found: "${youtubeMatches[0].title}" by "${youtubeMatches[0].artist}"`);
-                    results.perfectMatches.push({
-                        spotifyTrack: trackInfo,
-                        youtubeTrack: youtubeMatches[0],
-                        confidence: 'perfect'
-                    });
-                    results.summary.perfectMatchCount++;
                 } else {
-                    // Multiple matches - show best one for review
-                    const bestMatch = youtubeMatches[0]; // First one should be the best due to artist topic prioritization
-                    console.log(`⚠️ Multiple matches found - showing best: "${bestMatch.title}" by "${bestMatch.artist}"`);
-                    results.uncertainMatches.push({
-                        spotifyTrack: trackInfo,
-                        youtubeMatches: youtubeMatches.slice(0, 3), // Show top 3 matches
-                        reason: 'Multiple matches found - please review',
-                        requiresManualReview: true
-                    });
-                    results.summary.uncertainMatchCount++;
+                    // Evaluate match quality
+                    const bestMatch = youtubeMatches[0];
+                    const matchQuality = this.calculateYouTubeMatchQuality(trackInfo, bestMatch);
+                    
+                    if (matchQuality === 'perfect') {
+                        console.log(`🎯 Perfect match: "${bestMatch.title}" by "${bestMatch.artist}"`);
+                        results.perfectMatches.push({
+                            spotifyTrack: trackInfo,
+                            youtubeTrack: bestMatch,
+                            confidence: 'perfect'
+                        });
+                        results.summary.perfectMatchCount++;
+                    } else if (matchQuality === 'good' && youtubeMatches.length === 1) {
+                        // Auto-approve single good matches
+                        console.log(`🎯 Auto-approve good match: "${bestMatch.title}" by "${bestMatch.artist}"`);
+                        results.perfectMatches.push({
+                            spotifyTrack: trackInfo,
+                            youtubeTrack: bestMatch,
+                            confidence: 'good (auto-approved)'
+                        });
+                        results.summary.perfectMatchCount++;
+                    } else {
+                        // Uncertain matches require manual review
+                        console.log(`⚠️ Uncertain match: "${bestMatch.title}" by "${bestMatch.artist}"`);
+                        results.uncertainMatches.push({
+                            spotifyTrack: trackInfo,
+                            youtubeMatches: youtubeMatches.slice(0, 3),
+                            reason: `${matchQuality} match found - please verify`,
+                            requiresManualReview: true
+                        });
+                        results.summary.uncertainMatchCount++;
+                    }
                 }
 
-                // Add a small delay to avoid hitting API rate limits
+                // Rate limiting delay
                 await this.delay(100);
             }
+
+            const stats = results.summary;
+            console.log(`🎉 Reverse sync preview complete: ${stats.perfectMatchCount} perfect, ${stats.uncertainMatchCount} uncertain, ${stats.duplicateCount} duplicates, ${stats.noMatchCount} no matches`);
 
             if (progressCallback) {
                 progressCallback({
                     phase: 'complete',
-                    message: `Analysis complete! Found ${results.summary.perfectMatchCount} perfect matches, ${results.summary.uncertainMatchCount} uncertain matches, ${results.summary.duplicateCount} duplicates, ${results.summary.noMatchCount} no matches`,
+                    message: `Analysis complete! Found ${stats.perfectMatchCount} perfect matches, ${stats.uncertainMatchCount} uncertain matches, ${stats.duplicateCount} duplicates, ${stats.noMatchCount} no matches`,
                     current: spotifyTracks.length,
                     total: spotifyTracks.length,
                     percentage: 100,
                     stats: {
                         processed: spotifyTracks.length,
                         total: spotifyTracks.length,
-                        matches: results.summary.perfectMatchCount + results.summary.uncertainMatchCount,
-                        duplicates: results.summary.duplicateCount
+                        matches: stats.perfectMatchCount + stats.uncertainMatchCount,
+                        duplicates: stats.duplicateCount
                     }
                 });
             }
 
             return results;
         } catch (error) {
-            console.error('Error during reverse sync preview:', error);
+            console.error('❌ Error during reverse sync preview:', error);
             throw error;
         }
-    }
-
-    // New method for executing reverse sync (Spotify to YouTube Music)
+    }    // Rebuild: Clean reverse sync execution (Spotify to YouTube Music)
     async executeReverseSync(options) {
-        console.log('executeReverseSync called with options:', options);
+        console.log('🔄 Starting reverse sync execution:', options);
         
         if (!options) {
             throw new Error('Options parameter is required');
@@ -811,17 +861,10 @@ class SyncService {
         } = options;
 
         try {
-            console.log('Starting reverse sync execution with options:', {
-                spotifyPlaylistId,
-                youtubePlaylistId,
-                approvedTracksCount: approvedTracks?.length || 0,
-                createNewPlaylist,
-                newPlaylistName
-            });
-
             // Validate authentication
-            if (!this.youtubeMusic.isAuthenticated) {
-                throw new Error('YouTube Music not authenticated');
+            const authStatus = await this.youtubeMusic.validateSetup();
+            if (!authStatus.valid) {
+                throw new Error(`YouTube Music not authenticated: ${authStatus.message}`);
             }
 
             // Validate input
@@ -830,140 +873,245 @@ class SyncService {
             }
 
             if (approvedTracks.length === 0) {
-                console.log('No tracks to sync');
-                return {
-                    playlistId: youtubePlaylistId,
-                    tracksAdded: [],
-                    tracksFailed: [],
-                    summary: {
-                        total: 0,
-                        successful: 0,
-                        failed: 0
-                    }
-                };
+                console.log('⚠️ No tracks to sync');
+                return this.createEmptyReverseResults(youtubePlaylistId);
             }
 
             let targetPlaylistId = youtubePlaylistId;
             
             // Create new playlist if requested
             if (createNewPlaylist) {
-                console.log(`Creating new YouTube Music playlist: "${newPlaylistName}"`);
-                const newPlaylist = await this.youtubeMusic.createPlaylist(newPlaylistName, 'Created by Spotisync');
+                const playlistName = newPlaylistName || `Spotify Sync - ${new Date().toLocaleDateString()}`;
+                console.log(`📝 Creating new YouTube Music playlist: "${playlistName}"`);
+                
+                const newPlaylist = await this.youtubeMusic.createPlaylist(playlistName, 'Created by Spotisync - Reverse Sync');
+                if (!newPlaylist || !newPlaylist.id) {
+                    throw new Error('Failed to create YouTube Music playlist');
+                }
+                
                 targetPlaylistId = newPlaylist.id;
-                console.log(`New playlist created with ID: ${targetPlaylistId}`);
+                console.log(`✅ Created playlist with ID: ${targetPlaylistId}`);
             }
 
-            const tracksAdded = [];
-            const tracksFailed = [];
+            const processedTracks = {
+                added: [],
+                failed: []
+            };
 
-            // Add approved tracks to YouTube Music playlist
-            for (const trackIdentifier of approvedTracks) {
+            // Process each approved track
+            console.log(`🎵 Processing ${approvedTracks.length} approved tracks...`);
+            
+            for (let i = 0; i < approvedTracks.length; i++) {
+                const trackData = approvedTracks[i];
+                
                 try {
-                    // Find the track data from preview results
-                    const trackData = this.findTrackFromPreview(trackIdentifier, previewResults);
-                    
-                    if (!trackData || !trackData.youtubeTrack) {
-                        console.error(`Track data not found for identifier: ${trackIdentifier}`);
-                        tracksFailed.push({
-                            identifier: trackIdentifier,
-                            error: 'Track data not found'
-                        });
-                        continue;
+                    // Validate track structure
+                    if (!trackData || !trackData.youtubeTrack || !trackData.spotifyTrack) {
+                        throw new Error('Invalid track data structure - missing youtubeTrack or spotifyTrack');
                     }
 
-                    console.log(`Adding track: "${trackData.youtubeTrack.title}" by "${trackData.youtubeTrack.artist}"`);
+                    const { youtubeTrack, spotifyTrack } = trackData;
                     
-                    // Add track to YouTube Music playlist
-                    await this.youtubeMusic.addTrackToPlaylist(targetPlaylistId, trackData.youtubeTrack.videoId);
-                    
-                    tracksAdded.push({
-                        spotifyTrack: trackData.spotifyTrack,
-                        youtubeTrack: trackData.youtubeTrack,
-                        identifier: trackIdentifier
-                    });
+                    if (!youtubeTrack.id) {
+                        throw new Error('YouTube track missing required ID');
+                    }
 
-                    console.log(`✅ Successfully added: "${trackData.youtubeTrack.title}"`);
+                    console.log(`[${i+1}/${approvedTracks.length}] Adding: "${youtubeTrack.title}" by "${youtubeTrack.artist}"`);
+                      // Add track to YouTube Music playlist
+                    try {
+                        const addResult = await this.youtubeMusic.addTrackToPlaylist(targetPlaylistId, youtubeTrack.id);
+                        
+                        if (addResult) {
+                            processedTracks.added.push({
+                                spotifyTrack: spotifyTrack,
+                                youtubeTrack: youtubeTrack
+                            });
+                            console.log(`✅ Success: "${youtubeTrack.title}"`);
+                        } else {
+                            // If the API reports failure but the track might be added anyway
+                            console.log(`⚠️ API reported failure for "${youtubeTrack.title}" but track may have been added`);
+                            
+                            // We'll count it as a failure to be on the safe side
+                            throw new Error('YouTube Music API reported failure during track addition, but the track may have been added');
+                        }
+                    } catch (addError) {
+                        throw new Error(`YouTube Music track addition error: ${addError.message}`);
+                    }
 
                 } catch (error) {
-                    console.error(`❌ Failed to add track ${trackIdentifier}:`, error.message);
-                    tracksFailed.push({
-                        identifier: trackIdentifier,
-                        error: error.message
+                    console.error(`❌ Failed to add track ${i+1}:`, error.message);
+                    
+                    processedTracks.failed.push({
+                        spotifyTrack: trackData?.spotifyTrack || { name: 'Unknown Track', artists: ['Unknown Artist'] },
+                        youtubeTrack: trackData?.youtubeTrack || { title: 'Unknown Track', artist: 'Unknown Artist' },
+                        error: error.message,
+                        index: i
                     });
                 }
 
-                // Add delay to avoid rate limiting
-                await this.delay(200);
+                // Rate limiting - be gentle with YouTube Music API
+                await this.delay(250);
             }
 
-            console.log(`🎉 Reverse sync completed! Added ${tracksAdded.length} tracks, ${tracksFailed.length} failed`);
+            // Calculate summary statistics
+            const totalApproved = approvedTracks.length;
+            const successCount = processedTracks.added.length;
+            const failedCount = processedTracks.failed.length;
+            
+            console.log(`🎉 Reverse sync complete! ${successCount}/${totalApproved} tracks added successfully (${failedCount} failed)`);
 
-            return {
+            // Build non-transferred data from preview results if available
+            const nonTransferred = this.buildNonTransferredData(previewResults, approvedTracks);            return {
                 playlistId: targetPlaylistId,
-                tracksAdded,
-                tracksFailed,
+                tracksAdded: processedTracks.added,
+                tracksFailed: processedTracks.failed,
+                duplicatesRemoved: [], // Added for consistency with executeSync results
+                nonTransferred: nonTransferred,
                 summary: {
-                    total: approvedTracks.length,
-                    successful: tracksAdded.length,
-                    failed: tracksFailed.length
+                    totalApproved: totalApproved,
+                    successfullyAdded: successCount,
+                    failed: failedCount,
+                    duplicatesRemoved: 0,
+                    nonTransferredCount: nonTransferred.unmatchedTracks.length + nonTransferred.unapprovedTracks.length
                 }
             };
 
         } catch (error) {
-            console.error('Error during reverse sync execution:', error);
+            console.error('❌ Error during reverse sync execution:', error);
             throw error;
         }
+    }    // Helper: Create empty results structure for reverse sync
+    createEmptyReverseResults(playlistId) {
+        return {
+            playlistId: playlistId,
+            tracksAdded: [],
+            tracksFailed: [],
+            duplicatesRemoved: [], // Added for consistency with executeSync results
+            nonTransferred: { unmatchedTracks: [], unapprovedTracks: [], failedTracks: [] },
+            summary: {
+                totalApproved: 0,
+                successfullyAdded: 0,
+                failed: 0,
+                duplicatesRemoved: 0,
+                nonTransferredCount: 0
+            }
+        };
     }
 
-    // Helper method to find existing YouTube tracks
+    // Helper: Build non-transferred data for reverse sync results
+    buildNonTransferredData(previewResults, approvedTracks) {
+        const nonTransferred = {
+            unmatchedTracks: [],
+            unapprovedTracks: [],
+            failedTracks: []
+        };
+
+        if (!previewResults) {
+            return nonTransferred;
+        }
+
+        // Add tracks that had no matches
+        if (previewResults.noMatches) {
+            nonTransferred.unmatchedTracks = previewResults.noMatches.map(track => ({
+                spotifyTrack: track.spotifyTrack,
+                reason: track.reason
+            }));
+        }
+
+        // Add uncertain tracks that weren't approved
+        if (previewResults.uncertainMatches) {
+            const approvedSet = new Set(
+                approvedTracks.map(track => {
+                    const spotify = track.spotifyTrack;
+                    return `${spotify.name || spotify.title}-${spotify.artist || (spotify.artists && spotify.artists.join(', '))}`.toLowerCase();
+                })
+            );
+
+            nonTransferred.unapprovedTracks = previewResults.uncertainMatches
+                .filter(track => {
+                    const spotify = track.spotifyTrack;
+                    const key = `${spotify.name || spotify.title}-${spotify.artist || (spotify.artists && spotify.artists.join(', '))}`.toLowerCase();
+                    return !approvedSet.has(key);
+                })
+                .map(track => ({
+                    spotifyTrack: track.spotifyTrack,
+                    youtubeMatches: track.youtubeMatches,
+                    reason: track.reason
+                }));
+        }
+
+        return nonTransferred;
+    }    // Helper: Find existing YouTube tracks for reverse sync
     findExistingYouTubeTrack(spotifyTrack, youtubeTracks) {
-        return youtubeTracks.find(yt => {
-            const ytInfo = this.youtubeMusic.normalizeTrackInfo(yt);
-            const titleMatch = this.normalizeString(ytInfo.title) === this.normalizeString(spotifyTrack.title);
-            const artistMatch = this.normalizeString(ytInfo.artist).includes(this.normalizeString(spotifyTrack.artist.split(',')[0]));
+        const normalizeForComparison = (str) => {
+            return str.toLowerCase()
+                .replace(/[^\w\s]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        };
+
+        const spotifyTitle = normalizeForComparison(spotifyTrack.title || spotifyTrack.name);
+        const spotifyArtist = normalizeForComparison(spotifyTrack.artist || (spotifyTrack.artists && spotifyTrack.artists.join(', ')) || '');
+
+        return youtubeTracks.find(ytTrack => {
+            const ytInfo = this.youtubeMusic.normalizeTrackInfo(ytTrack);
+            const ytTitle = normalizeForComparison(ytInfo.title);
+            const ytArtist = normalizeForComparison(ytInfo.artist);
+            
+            const titleMatch = ytTitle === spotifyTitle;
+            const artistMatch = ytArtist.includes(spotifyArtist.split(',')[0].trim()) || 
+                              spotifyArtist.includes(ytArtist.split(',')[0].trim());
+            
             return titleMatch && artistMatch;
         });
     }
 
-    // Helper method to normalize strings for comparison
-    normalizeString(str) {
-        return str.toLowerCase()
-            .replace(/[^\w\s]/g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-   }
-
-    // Helper method to find track data from preview results using track identifier
-    findTrackFromPreview(trackIdentifier, previewResults) {
-        if (!previewResults || !trackIdentifier) {
-            return null;
+    // Helper: Calculate YouTube match quality for reverse sync
+    calculateYouTubeMatchQuality(spotifyTrack, youtubeTrack) {
+        const normalizeForComparison = (str) => {
+            return str.toLowerCase()
+                .replace(/[^\w\s]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        };
+        
+        const spotifyTitle = normalizeForComparison(spotifyTrack.title || spotifyTrack.name);
+        const youtubeTitle = normalizeForComparison(youtubeTrack.title);
+        
+        const spotifyArtist = normalizeForComparison(spotifyTrack.artist || (spotifyTrack.artists && spotifyTrack.artists.join(', ')) || '');
+        const youtubeArtist = normalizeForComparison(youtubeTrack.artist);
+        
+        // Check for exact matches
+        const titleExact = spotifyTitle === youtubeTitle;
+        const artistExact = spotifyArtist === youtubeArtist;
+        
+        // Perfect match: both title and artist are exactly the same
+        if (titleExact && artistExact) {
+            return 'perfect';
         }
-
-        // Parse the track identifier (format: "type-index")
-        const [type, index] = trackIdentifier.split('-');
-        const trackIndex = parseInt(index);
-
-        if (isNaN(trackIndex)) {
-            console.error('Invalid track index in identifier:', trackIdentifier);
-            return null;
+        
+        // Check for partial matches
+        const titlePartial = spotifyTitle.includes(youtubeTitle) || youtubeTitle.includes(spotifyTitle);
+        const artistPartial = spotifyArtist.includes(youtubeArtist) || youtubeArtist.includes(spotifyArtist);
+        
+        // Good match: exact title with partial artist, or exact artist with partial title
+        if ((titleExact && artistPartial) || (artistExact && titlePartial)) {
+            return 'good';
         }
-
-        // Find track in appropriate preview results array
-        if (type === 'perfect' && previewResults.perfectMatches && previewResults.perfectMatches[trackIndex]) {
-            return previewResults.perfectMatches[trackIndex];
-        } else if (type === 'uncertain' && previewResults.uncertainMatches && previewResults.uncertainMatches[trackIndex]) {
-            const uncertainTrack = previewResults.uncertainMatches[trackIndex];
-            // For uncertain tracks, use the best match (first in the youtubeMatches array)
-            if (uncertainTrack.youtubeMatches && uncertainTrack.youtubeMatches.length > 0) {
-                return {
-                    spotifyTrack: uncertainTrack.spotifyTrack,
-                    youtubeTrack: uncertainTrack.youtubeMatches[0] // Use best match
-                };
-            }
+        
+        // Good match: both have strong partial matches and sufficient length
+        if (titlePartial && artistPartial && 
+            spotifyTitle.length > 3 && youtubeTitle.length > 3 &&
+            spotifyArtist.length > 3 && youtubeArtist.length > 3) {
+            return 'good';
         }
-
-        console.error('Track not found in preview results for identifier:', trackIdentifier);
-        return null;
+        
+        // Partial match: at least one field matches (exact or partial)
+        if (titleExact || artistExact || titlePartial || artistPartial) {
+            return 'partial';
+        }
+        
+        return 'poor';
     }
 }
 

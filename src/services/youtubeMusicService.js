@@ -1,634 +1,337 @@
-const { google } = require('googleapis');
+const fs = require('fs');
+const path = require('path');
 
 class YouTubeMusicService {
     constructor() {
-        this.oauth2Client = new google.auth.OAuth2(
-            process.env.GOOGLE_CLIENT_ID,
-            process.env.GOOGLE_CLIENT_SECRET,
-            process.env.GOOGLE_REDIRECT_URI
-        );
-        this.youtube = google.youtube({ version: 'v3', auth: this.oauth2Client });
+        this.ytmusic = null;
+        this.ytma = null; // Authenticated API instance
         this.isAuthenticated = false;
-        this.quotaExceeded = false;
+        this.quotaExceeded = false; // Keep this for compatibility
         console.log('YouTube Music Service initialized');
     }
 
     /**
-     * Check if error is due to quota exceeded
+     * Initialize the service with cookie-based authentication
      */
-    isQuotaExceededError(error) {
-        return error.code === 403 && 
-               (error.message.includes('quotaExceeded') || 
-                error.message.includes('quota') ||
-                (error.errors && error.errors.some(e => e.reason === 'quotaExceeded')));
+    async initialize() {
+        try {
+            console.log('🔐 Initializing YouTube Music authentication...');
+            
+            // Lazy load the YouTube Music API to avoid constructor issues
+            if (!this.ytmusic) {
+                const YouTubeMusic = require('youtube-music-ts-api').default;
+                this.ytmusic = new YouTubeMusic();
+                console.log('📦 YouTube Music API instance created');
+            }
+            
+            // Read the authentication file
+            const oauthPath = path.join(process.cwd(), 'oauth.json');
+            
+            if (!fs.existsSync(oauthPath)) {
+                console.log('❌ OAuth file not found. Please provide oauth.json for authentication.');
+                return false;
+            }
+
+            const authData = JSON.parse(fs.readFileSync(oauthPath, 'utf8'));
+            console.log('📄 Authentication data loaded successfully');
+
+            // Extract cookie string from auth data
+            const cookieString = authData.cookie || authData.Cookie;
+            
+            if (!cookieString) {
+                console.log('❌ No cookie found in authentication data');
+                return false;
+            }
+
+            console.log('🍪 Cookie found, authenticating...');
+            
+            // Authenticate with the API
+            this.ytma = await this.ytmusic.authenticate(cookieString);
+            this.isAuthenticated = true;
+            
+            console.log('✅ YouTube Music authentication successful!');
+            
+            // Test the connection
+            const playlists = await this.ytma.getLibraryPlaylists();
+            console.log(`🎵 Successfully connected to YouTube Music! Found ${playlists.length} playlists.`);
+            
+            return true;
+            
+        } catch (error) {
+            console.error('❌ YouTube Music initialization failed:', error.message);
+            this.isAuthenticated = false;
+            return false;
+        }
     }
 
     /**
-     * Handle API errors with quota awareness
+     * Get user's playlists from YouTube Music
      */
-    handleApiError(error, operation) {
-        if (this.isQuotaExceededError(error)) {
-            this.quotaExceeded = true;
-            console.warn(`YouTube API quota exceeded for operation: ${operation}`);
-            throw new Error(`YouTube API quota exceeded. Please try again tomorrow or contact the developer to increase quota limits.`);
-        }
-        
-        console.error(`YouTube API error during ${operation}:`, error);
-        throw error;
-    }
-
-    getAuthUrl() {
-        const scopes = [
-            'https://www.googleapis.com/auth/youtube.readonly',
-            'https://www.googleapis.com/auth/youtubepartner'
-        ];
-        
-        return this.oauth2Client.generateAuthUrl({
-            access_type: 'offline',
-            scope: scopes,
-            prompt: 'consent'
-        });
-    }    async authenticate(code) {
+    async getUserPlaylists() {
         try {
-            const { tokens } = await this.oauth2Client.getToken(code);
-            this.oauth2Client.setCredentials(tokens);
-            this.isAuthenticated = true;
-            this.quotaExceeded = false; // Reset quota flag on successful auth
-            return tokens;
-        } catch (error) {
-            console.error('YouTube authentication error:', error);
-            this.handleApiError(error, 'authentication');
-        }
-    }    async getUserPlaylists() {
-        if (!this.isAuthenticated) {
-            throw new Error('Not authenticated with YouTube');
-        }
-        
-        if (this.quotaExceeded) {
-            throw new Error('YouTube API quota exceeded. Cannot fetch playlists at this time.');
-        }
-        
-        try {
-            const response = await this.youtube.playlists.list({
-                part: ['snippet', 'contentDetails'],
-                mine: true,
-                maxResults: 50
-            });
-
-            return response.data.items.map(playlist => ({
-                id: playlist.id,
-                name: playlist.snippet.title,
-                description: playlist.snippet.description || '',
-                trackCount: playlist.contentDetails.itemCount,
-                thumbnail: playlist.snippet.thumbnails?.medium?.url
-            }));
-        } catch (error) {
-            this.handleApiError(error, 'getUserPlaylists');        }
-    }
-
-    async getPlaylistTracks(playlistId) {
-        if (!this.isAuthenticated) {
-            throw new Error('Not authenticated with YouTube');
-        }
-        
-        if (this.quotaExceeded) {
-            throw new Error('YouTube API quota exceeded. Cannot fetch playlist tracks at this time.');
-        }
-        
-        try {
-            const tracks = [];
-            let nextPageToken = null;
-            const maxResults = 50; // YouTube API limit per request
-
-            do {
-                const requestParams = {
-                    part: ['snippet'],
-                    playlistId: playlistId,
-                    maxResults: maxResults
-                };
-
-                if (nextPageToken) {
-                    requestParams.pageToken = nextPageToken;
-                }
-
-                const response = await this.youtube.playlistItems.list(requestParams);
-                
-                const pageItems = response.data.items.map(item => {
-                    const snippet = item.snippet;
-                    const rawTitle = snippet.title;
-                    
-                    // Parse artist and title from video title
-                    const { artist, title } = this.parseVideoTitle(rawTitle);
-                    
-                    return {
-                        id: snippet.resourceId.videoId,
-                        title: title,
-                        artist: artist,
-                        album: 'Unknown Album', // YouTube doesn't provide album info directly
-                        duration: 'Unknown', // Would need additional API call to get duration
-                        thumbnail: snippet.thumbnails?.medium?.url,
-                        rawTitle: rawTitle, // Keep original title for debugging
-                        channelTitle: snippet.videoOwnerChannelTitle
-                    };
-                });
-
-                tracks.push(...pageItems);
-                nextPageToken = response.data.nextPageToken;
-                
-                console.log(`Fetched ${pageItems.length} tracks from YouTube playlist (total so far: ${tracks.length})`);
-                
-            } while (nextPageToken);            console.log(`Total tracks fetched from YouTube playlist: ${tracks.length}`);
-            return tracks;
-        } catch (error) {
-            this.handleApiError(error, 'getPlaylistTracks');
-        }
-    }
-
-    async searchTrack(trackName, artistName) {
-        if (!this.isAuthenticated) {
-            console.log(`Mock search for: ${trackName} by ${artistName}`);
-            
-            // Mock search results for demonstration
-            const mockResults = [
-                {
-                    videoId: 'mock_video_1',
-                    name: trackName,
-                    title: trackName,
-                    artists: [{ name: artistName }],
-                    album: { name: 'Mock Album' },
-                    duration: { text: '3:45' }
-                }
-            ];
-            
-            return mockResults.map(track => ({
-                id: track.videoId,
-                title: track.name || track.title,
-                artist: this.extractArtistName(track),
-                album: track.album?.name || 'Unknown Album',
-                duration: track.duration?.text || 'Unknown',
-                confidence: this.calculateMatchConfidence(trackName, artistName, track)
-            }));        }
-
-        if (this.quotaExceeded) {
-            console.log(`YouTube API quota exceeded - returning empty results for: ${trackName} by ${artistName}`);
-            return [];
-        }
-
-        try {
-            // Real YouTube search implementation
-            const response = await this.youtube.search.list({
-                part: ['snippet'],
-                q: `${trackName} ${artistName}`,
-                type: 'video',
-                maxResults: 5
-            });
-
-            return response.data.items.map(item => ({
-                id: item.id.videoId,
-                title: item.snippet.title,
-                artist: item.snippet.channelTitle,
-                album: 'Unknown Album',
-                duration: 'Unknown',
-                thumbnail: item.snippet.thumbnails?.medium?.url,
-                confidence: this.calculateMatchConfidence(trackName, artistName, {
-                    title: item.snippet.title,
-                    artist: { name: item.snippet.channelTitle }
-                })
-            }));
-        } catch (error) {
-            this.handleApiError(error, 'searchTrack');
-        }
-    }    // Enhanced search method with artist topic channel prioritization
-    async searchTrackWithArtistPriority(trackName, artistName) {
-        if (!this.isAuthenticated) {
-            console.log(`Mock search with artist priority for: ${trackName} by ${artistName}`);
-            
-            // Mock search results for demonstration
-            const mockResults = [
-                {
-                    videoId: 'mock_video_1',
-                    title: trackName,
-                    artist: artistName,
-                    channelTitle: `${artistName} - Topic`,
-                    isTopicChannel: true,
-                    confidence: 'perfect'
-                }
-            ];
-            
-            return mockResults;
-        }
-
-        if (this.quotaExceeded) {
-            console.log(`YouTube API quota exceeded - returning empty results for artist priority search: ${trackName} by ${artistName}`);
-            return [];
-        }
-
-        try {
-            console.log(`🔍 Searching YouTube Music for: "${trackName}" by "${artistName}"`);
-            
-            // Search with multiple strategies to find the best matches
-            const searchQueries = [
-                `"${trackName}" "${artistName}"`, // Exact phrases
-                `${trackName} ${artistName}`,     // Regular search
-                `${artistName} ${trackName}`,     // Artist first
-            ];
-
-            let allResults = [];
-            
-            for (const query of searchQueries) {
-                try {
-                    console.log(`  📡 Trying search query: ${query}`);
-                    const response = await this.youtube.search.list({
-                        part: ['snippet'],
-                        q: query,
-                        type: 'video',
-                        videoCategoryId: '10', // Music category
-                        maxResults: 10
-                    });
-
-                    if (response.data.items && response.data.items.length > 0) {
-                        const results = response.data.items.map(item => ({
-                            videoId: item.id.videoId,
-                            title: this.cleanTrackTitle(item.snippet.title),
-                            artist: this.extractArtistName({
-                                channelTitle: item.snippet.channelTitle,
-                                title: item.snippet.title
-                            }),
-                            channelTitle: item.snippet.channelTitle,
-                            thumbnail: item.snippet.thumbnails?.medium?.url,
-                            isTopicChannel: item.snippet.channelTitle?.toLowerCase().includes('topic') || false,
-                            confidence: this.calculateMatchConfidence(trackName, artistName, {
-                                title: item.snippet.title,
-                                channelTitle: item.snippet.channelTitle
-                            })
-                        }));
-
-                        allResults.push(...results);
-                    }
-
-                    // Add small delay between searches
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                } catch (searchError) {
-                    console.error(`  ❌ Search query failed: ${query}`, searchError.message);
-                }
+            if (!this.isAuthenticated || !this.ytma) {
+                console.log('⚠️ YouTube Music not authenticated. Call initialize() first.');
+                return [];
             }
 
-            // Remove duplicates and prioritize results
-            const uniqueResults = this.removeDuplicates(allResults);
-            const prioritizedResults = this.prioritizeSearchResults(uniqueResults, trackName, artistName);
-
-            console.log(`  ✅ Found ${prioritizedResults.length} unique results after prioritization`);
+            console.log('🎵 Fetching YouTube Music playlists...');
+            const playlists = await this.ytma.getLibraryPlaylists();
             
-            // Log the top results for debugging
-            prioritizedResults.slice(0, 3).forEach((result, index) => {
-                console.log(`    ${index + 1}. "${result.title}" by "${result.artist}" (${result.channelTitle}) - ${result.isTopicChannel ? 'TOPIC CHANNEL' : 'regular'} - ${result.confidence}`);
-            });            return prioritizedResults.slice(0, 5); // Return top 5 results
-
-        } catch (error) {
-            this.handleApiError(error, 'searchTrackWithArtistPriority');
-        }
-    }    // Method to create a new YouTube Music playlist
-    async createPlaylist(name, description = '') {
-        if (!this.isAuthenticated) {
-            throw new Error('Not authenticated with YouTube');
-        }
-
-        if (this.quotaExceeded) {
-            throw new Error('YouTube API quota exceeded. Cannot create playlist at this time.');
-        }
-
-        try {
-            console.log(`🎵 Creating new YouTube Music playlist: "${name}"`);
+            console.log(`✅ Found ${playlists.length} YouTube Music playlists`);
             
-            const response = await this.youtube.playlists.insert({
-                part: ['snippet', 'status'],
-                resource: {
-                    snippet: {
-                        title: name,
-                        description: description || 'Created by Spotisync',
-                        defaultLanguage: 'en'
-                    },
-                    status: {
-                        privacyStatus: 'private' // Start as private, user can change later
-                    }
-                }
-            });
-
-            const playlist = response.data;
-            console.log(`✅ Playlist created successfully with ID: ${playlist.id}`);
-            
-            return {
+            return playlists.map(playlist => ({
                 id: playlist.id,
-                name: playlist.snippet.title,
-                description: playlist.snippet.description,
-                url: `https://music.youtube.com/playlist?list=${playlist.id}`            };
-
-        } catch (error) {
-            this.handleApiError(error, 'createPlaylist');
-        }
-    }    // Method to add a track to a YouTube Music playlist
-    async addTrackToPlaylist(playlistId, videoId) {
-        if (!this.isAuthenticated) {
-            throw new Error('Not authenticated with YouTube');
-        }
-
-        if (this.quotaExceeded) {
-            throw new Error('YouTube API quota exceeded. Cannot add tracks to playlist at this time.');
-        }
-
-        try {
-            console.log(`🎵 Adding video ${videoId} to playlist ${playlistId}`);
+                name: playlist.name,
+                tracks: playlist.tracks || [],
+                trackCount: playlist.tracks?.length || 0
+            }));
             
-            const response = await this.youtube.playlistItems.insert({
-                part: ['snippet'],
-                resource: {
-                    snippet: {
-                        playlistId: playlistId,
-                        resourceId: {
-                            kind: 'youtube#video',
-                            videoId: videoId
+        } catch (error) {
+            console.error('❌ Error fetching YouTube Music playlists:', error.message);
+            return [];
+        }
+    }    /**
+     * Get tracks from a specific playlist
+     * Handles continuation tokens to fetch all tracks, not just the first 200
+     */
+    async getPlaylistTracks(playlistId) {
+        try {
+            if (!this.isAuthenticated || !this.ytma) {
+                console.log('⚠️ YouTube Music not authenticated. Call initialize() first.');
+                return [];
+            }
+
+            console.log(`🎵 Fetching tracks for playlist: ${playlistId}`);
+            let allTracks = [];
+            let playlist = null;
+            let continuationToken = null;
+            let pageCounter = 1;
+            
+            do {
+                try {
+                    // If it's the first page, fetch the playlist normally
+                    if (pageCounter === 1) {
+                        playlist = await this.ytma.getPlaylist(playlistId);
+                        if (!playlist || !playlist.tracks) {
+                            console.log(`⚠️ No tracks found for playlist: ${playlistId}`);
+                            return [];
+                        }
+                        allTracks = [...playlist.tracks];
+                        continuationToken = playlist.continuation;
+                        console.log(`📃 Fetched page ${pageCounter}: ${allTracks.length} tracks so far`);
+                    } 
+                    // For subsequent pages, use continuation token
+                    else if (continuationToken) {
+                        const nextPage = await this.ytma.getPlaylistContinuation(playlistId, continuationToken);
+                        if (nextPage && nextPage.tracks && nextPage.tracks.length > 0) {
+                            allTracks = [...allTracks, ...nextPage.tracks];
+                            continuationToken = nextPage.continuation;
+                            console.log(`📃 Fetched page ${pageCounter}: ${allTracks.length} tracks so far`);
+                        } else {
+                            continuationToken = null;
                         }
                     }
+                } catch (pageError) {
+                    console.error(`❌ Error fetching page ${pageCounter}:`, pageError.message);
+                    // If we get an error, stop pagination but return what we have
+                    continuationToken = null;
                 }
-            });            console.log(`✅ Track added successfully to playlist`);
-            return response.data;
+                pageCounter++;
+            } while (continuationToken);
 
+            console.log(`✅ Found ${allTracks.length} tracks in playlist (across multiple pages)`);
+            
+            return allTracks.map(track => ({
+                id: track.id,
+                title: track.title,
+                artist: track.artist?.name || track.artist || 'Unknown Artist',
+                album: track.album?.name || track.album || 'Unknown Album',
+                duration: track.duration || '0:00'
+            }));
+            
         } catch (error) {
-            this.handleApiError(error, 'addTrackToPlaylist');
+            console.error(`❌ Error fetching playlist tracks for ${playlistId}:`, error.message);
+            return [];
         }
     }
 
-    // Helper method to clean track titles
-    cleanTrackTitle(title) {
-        if (!title) return '';
-        
-        // Remove common YouTube suffixes and prefixes
-        return title
-            .replace(/\s*\(Official Video\)/gi, '')
-            .replace(/\s*\(Official Music Video\)/gi, '')
-            .replace(/\s*\(Official Audio\)/gi, '')
-            .replace(/\s*\(Lyrics\)/gi, '')
-            .replace(/\s*\[Official Video\]/gi, '')
-            .replace(/\s*\[Official Music Video\]/gi, '')
-            .replace(/\s*\[Official Audio\]/gi, '')
-            .replace(/\s*\[Lyrics\]/gi, '')
-            .replace(/\s*\|\s*Official\s*/gi, '')
-            .replace(/\s*-\s*Official\s*/gi, '')
-            .trim();
+    /**
+     * Search for a track on YouTube Music
+     */
+    async searchTrack(trackName, artistName) {
+        try {
+            if (!this.isAuthenticated || !this.ytma) {
+                console.log('⚠️ YouTube Music not authenticated. Call initialize() first.');
+                return null;
+            }
+
+            const query = `${trackName} ${artistName}`.trim();
+            console.log(`🔍 Searching YouTube Music for: "${query}"`);
+            
+            const searchResults = await this.ytma.search(query);
+            
+            if (!searchResults || searchResults.length === 0) {
+                console.log(`❌ No search results found for: "${query}"`);
+                return null;
+            }
+
+            // Return the first result that's a song
+            const song = searchResults.find(result => result.type === 'song' || result.type === 'video');
+            
+            if (song) {
+                console.log(`✅ Found match: "${song.title}" by ${song.artist?.name || 'Unknown Artist'}`);
+                return {
+                    id: song.id,
+                    title: song.title,
+                    artist: song.artist?.name || song.artist || 'Unknown Artist',
+                    album: song.album?.name || song.album || 'Unknown Album',
+                    duration: song.duration || '0:00'
+                };
+            } else {
+                console.log(`❌ No suitable song found for: "${query}"`);
+                return null;
+            }
+            
+        } catch (error) {
+            console.error(`❌ Error searching for track "${trackName}" by "${artistName}":`, error.message);
+            return null;
+        }
     }
 
-    // Helper method to remove duplicate search results
-    removeDuplicates(results) {
-        const seen = new Set();
-        return results.filter(result => {
-            const key = `${result.videoId}_${result.title}_${result.artist}`;
-            if (seen.has(key)) {
+    /**
+     * Create a new playlist on YouTube Music
+     */
+    async createPlaylist(name, description = '') {
+        try {
+            if (!this.isAuthenticated || !this.ytma) {
+                console.log('⚠️ YouTube Music not authenticated. Call initialize() first.');
+                return null;
+            }
+
+            console.log(`🎵 Creating playlist: "${name}"`);
+            
+            const playlist = await this.ytma.createPlaylist(name, description);
+            
+            if (playlist && playlist.id) {
+                console.log(`✅ Created playlist: "${name}" (ID: ${playlist.id})`);
+                return {
+                    id: playlist.id,
+                    name: playlist.name || name,
+                    description: playlist.description || description,
+                    tracks: []
+                };
+            } else {
+                console.log(`❌ Failed to create playlist: "${name}"`);
+                return null;
+            }
+            
+        } catch (error) {
+            console.error(`❌ Error creating playlist "${name}":`, error.message);
+            return null;
+        }
+    }
+
+    /**
+     * Add a track to a playlist
+     */
+    async addTrackToPlaylist(playlistId, trackId) {
+        try {
+            if (!this.isAuthenticated || !this.ytma) {
+                console.log('⚠️ YouTube Music not authenticated. Call initialize() first.');
                 return false;
             }
-            seen.add(key);
+
+            console.log(`🎵 Adding track ${trackId} to playlist ${playlistId}`);
+            
+            const result = await this.ytma.addTracksToPlaylist(playlistId, [trackId]);
+            
+            if (result) {
+                console.log(`✅ Track added to playlist successfully`);
+                return true;
+            } else {
+                console.log(`❌ Failed to add track to playlist`);
+                return false;
+            }
+            
+        } catch (error) {
+            console.error(`❌ Error adding track ${trackId} to playlist ${playlistId}:`, error.message);
+            return false;
+        }
+    }
+
+    /**
+     * Refresh the cookie session
+     * This helps prevent authentication issues due to cookie expiration
+     */
+    async refreshCookieSession() {
+        try {
+            console.log('🔄 Refreshing YouTube Music cookie session...');
+            
+            // Read the authentication file again to get fresh cookies
+            const oauthPath = path.join(process.cwd(), 'oauth.json');
+            
+            if (!fs.existsSync(oauthPath)) {
+                console.log('❌ OAuth file not found. Cannot refresh session.');
+                return false;
+            }
+
+            const authData = JSON.parse(fs.readFileSync(oauthPath, 'utf8'));
+            
+            // Extract cookie string from auth data
+            const cookieString = authData.cookie || authData.Cookie;
+            
+            if (!cookieString) {
+                console.log('❌ No cookie found in authentication data');
+                return false;
+            }
+
+            console.log('🍪 Fresh cookie loaded, re-authenticating...');
+            
+            // Re-authenticate with the API
+            this.ytma = await this.ytmusic.authenticate(cookieString);
+            this.isAuthenticated = true;
+            
+            console.log('✅ YouTube Music session refreshed successfully!');
             return true;
-        });
-    }
-
-    // Helper method to prioritize search results with artist topic channels first
-    prioritizeSearchResults(results, originalTrack, originalArtist) {
-        const normalizeString = (str) => str.toLowerCase().replace(/[^\w\s]/g, '').trim();
-        const originalTrackNorm = normalizeString(originalTrack);
-        const originalArtistNorm = normalizeString(originalArtist);
-
-        return results.sort((a, b) => {
-            // Score each result
-            let scoreA = 0;
-            let scoreB = 0;
-
-            // PRIORITY 1: Artist Topic Channels get highest priority (100 points)
-            if (a.isTopicChannel) scoreA += 100;
-            if (b.isTopicChannel) scoreB += 100;
-
-            // PRIORITY 2: Exact artist match in topic channel (50 points)
-            if (a.isTopicChannel && normalizeString(a.artist) === originalArtistNorm) scoreA += 50;
-            if (b.isTopicChannel && normalizeString(b.artist) === originalArtistNorm) scoreB += 50;
-
-            // PRIORITY 3: Exact track title match (40 points)
-            if (normalizeString(a.title) === originalTrackNorm) scoreA += 40;
-            if (normalizeString(b.title) === originalTrackNorm) scoreB += 40;
-
-            // PRIORITY 4: Exact artist match (30 points)
-            if (normalizeString(a.artist) === originalArtistNorm) scoreA += 30;
-            if (normalizeString(b.artist) === originalArtistNorm) scoreB += 30;
-
-            // PRIORITY 5: Partial track title match (20 points)
-            if (normalizeString(a.title).includes(originalTrackNorm) || originalTrackNorm.includes(normalizeString(a.title))) scoreA += 20;
-            if (normalizeString(b.title).includes(originalTrackNorm) || originalTrackNorm.includes(normalizeString(b.title))) scoreB += 20;
-
-            // PRIORITY 6: Partial artist match (15 points)
-            if (normalizeString(a.artist).includes(originalArtistNorm) || originalArtistNorm.includes(normalizeString(a.artist))) scoreA += 15;
-            if (normalizeString(b.artist).includes(originalArtistNorm) || originalArtistNorm.includes(normalizeString(b.artist))) scoreB += 15;
-
-            // PRIORITY 7: Confidence bonus (10 points for perfect, 5 for good)
-            if (a.confidence === 'perfect') scoreA += 10;
-            else if (a.confidence === 'good') scoreA += 5;
-            if (b.confidence === 'perfect') scoreB += 10;
-            else if (b.confidence === 'good') scoreB += 5;
-
-            // Sort by highest score first
-            return scoreB - scoreA;
-        });
-    }
-
-    parseVideoTitle(rawTitle) {
-        // Common patterns for YouTube music videos:
-        // "Artist - Song Title"
-        // "Artist: Song Title" 
-        // "Song Title - Artist"
-        // "Song Title by Artist"
-        // "Artist | Song Title"
-        
-        const title = rawTitle.trim();
-        
-        // Try pattern: "Artist - Song Title"
-        if (title.includes(' - ')) {
-            const parts = title.split(' - ');
-            if (parts.length >= 2) {
-                const potentialArtist = parts[0].trim();
-                const potentialTitle = parts.slice(1).join(' - ').trim();
-                  // Avoid cases where the first part looks like a song title
-                if (!this.looksLikeSongTitle(potentialArtist)) {
-                    return {
-                        artist: this.cleanArtistName(potentialArtist),
-                        title: potentialTitle
-                    };
-                }
-                // Try reverse: "Song Title - Artist"
-                else if (!this.looksLikeSongTitle(potentialTitle)) {
-                    return {
-                        artist: this.cleanArtistName(potentialTitle),
-                        title: potentialArtist
-                    };
-                }
-            }
-        }
-          // Try pattern: "Artist: Song Title"
-        if (title.includes(': ')) {
-            const parts = title.split(': ');
-            if (parts.length >= 2) {
-                return {
-                    artist: this.cleanArtistName(parts[0].trim()),
-                    title: parts.slice(1).join(': ').trim()
-                };
-            }
-        }
-        
-        // Try pattern: "Song Title by Artist"
-        if (title.includes(' by ')) {
-            const parts = title.split(' by ');
-            if (parts.length >= 2) {
-                return {
-                    artist: this.cleanArtistName(parts[parts.length - 1].trim()),
-                    title: parts.slice(0, -1).join(' by ').trim()
-                };
-            }
-        }
-        
-        // Try pattern: "Artist | Song Title"
-        if (title.includes(' | ')) {
-            const parts = title.split(' | ');
-            if (parts.length >= 2) {
-                return {
-                    artist: this.cleanArtistName(parts[0].trim()),
-                    title: parts.slice(1).join(' | ').trim()
-                };
-            }
-        }
-        
-        // If no pattern matches, try to extract from common keywords
-        const keywords = ['official video', 'official music video', 'lyrics', 'audio', 'hd', 'hq'];
-        let cleanTitle = title;
-        
-        // Remove common keywords (case insensitive)
-        keywords.forEach(keyword => {
-            const regex = new RegExp(`\\s*\\(.*${keyword}.*\\)`, 'gi');
-            cleanTitle = cleanTitle.replace(regex, '');
-            const regex2 = new RegExp(`\\s*\\[.*${keyword}.*\\]`, 'gi');
-            cleanTitle = cleanTitle.replace(regex2, '');
-        });
-        
-        // If still no clear separation, use the whole title as song title
-        return {
-            artist: 'Unknown Artist',
-            title: cleanTitle.trim() || title
-        };
-    }
-    
-    looksLikeSongTitle(text) {
-        // Simple heuristic: if it contains common song title indicators
-        const songIndicators = ['official video', 'music video', 'lyrics', 'audio', 'ft.', 'feat.', 'remix'];
-        const lowerText = text.toLowerCase();
-        return songIndicators.some(indicator => lowerText.includes(indicator));
-    }    extractArtistName(track) {
-        // PRIORITY 1: Check if it's a "Topic" channel - which always indicates the artist name
-        // Topic channels are official artist channels managed by YouTube Music
-        if (track.channelTitle && track.channelTitle.toLowerCase().includes('topic')) {
-            const artistName = this.cleanArtistName(track.channelTitle);
-            console.log(`Found Topic channel: ${track.channelTitle} → Using artist "${artistName}" for track: ${track.title || track.name}`);
             
-            // Log additional information for debugging
-            if (track.artist && track.artist !== 'Unknown Artist' && 
-                this.cleanArtistName(track.artist) !== artistName) {
-                console.log(`  Note: Overriding track artist "${track.artist}" with Topic channel artist "${artistName}"`);
-            }
-            
-            return artistName;
+        } catch (error) {
+            console.error('❌ YouTube Music session refresh failed:', error.message);
+            return false;
         }
-        
-        // If we already parsed the artist, use it
-        if (track.artist && track.artist !== 'Unknown Artist') {
-            return this.cleanArtistName(track.artist);
-        }
-        
-        // Try different properties
-        if (track.artist?.name) return this.cleanArtistName(track.artist.name);
-        if (track.artists && track.artists.length > 0) {
-            return this.cleanArtistName(track.artists[0].name);
-        }
-        if (track.subtitle) {
-            // YouTube Music often puts artist info in subtitle
-            return this.cleanArtistName(track.subtitle.split(' • ')[0]);
-        }
-        
-        // Fallback to channel title if no artist found
-        if (track.channelTitle && track.channelTitle !== 'Unknown Artist') {
-            return this.cleanArtistName(track.channelTitle);
-        }
-        
-        // Last resort: try to parse from raw title
-        if (track.rawTitle) {
-            const parsed = this.parseVideoTitle(track.rawTitle);
-            if (parsed.artist !== 'Unknown Artist') {
-                return this.cleanArtistName(parsed.artist);
-            }
-        }
-        
-        return 'Unknown Artist';
     }
 
-    cleanArtistName(artistName) {
-        if (!artistName) return 'Unknown Artist';
-        
-        // Enhanced cleaning for better artist name extraction
-        return artistName
-            .replace(/\s*-\s*Topic\s*$/i, '') // Remove "- Topic" suffix
-            .replace(/\s*VEVO\s*$/i, '') // Remove "VEVO" suffix
-            .replace(/\s*Official\s*$/i, '') // Remove "Official" suffix
-            .replace(/\s*Music\s*$/i, '') // Remove "Music" suffix
-            .replace(/\s*Band\s*$/i, '') // Remove "Band" suffix
-            .replace(/\s*Channel\s*$/i, '') // Remove "Channel" suffix
-            .replace(/\s*Records\s*$/i, '') // Remove "Records" suffix
-            .replace(/^The\s+(.+)$/i, '$1') // Move "The" from beginning to end
-            .trim();
-    }
-
-    calculateMatchConfidence(originalTrack, originalArtist, youtubeTrack) {
-        const normalizeString = (str) => str.toLowerCase().replace(/[^\w\s]/g, '').trim();
-        
-        const trackName = youtubeTrack.name || youtubeTrack.title || '';
-        const artistName = this.extractArtistName(youtubeTrack);
-        
-        const trackMatch = normalizeString(originalTrack) === normalizeString(trackName);
-        const artistMatch = normalizeString(originalArtist) === normalizeString(artistName);
-
-        if (trackMatch && artistMatch) return 'perfect';
-        
-        // Check for partial matches (useful for variations in titles)
-        const trackPartialMatch = normalizeString(trackName).includes(normalizeString(originalTrack)) ||
-                                 normalizeString(originalTrack).includes(normalizeString(trackName));
-        const artistPartialMatch = normalizeString(artistName).includes(normalizeString(originalArtist)) ||
-                                  normalizeString(originalArtist).includes(normalizeString(artistName));
-
-        if (trackPartialMatch && artistPartialMatch) return 'good';
-        if (trackMatch || artistMatch) return 'partial';
-        return 'poor';
-    }
-
-    // Helper method to get track info in a standardized format
-    normalizeTrackInfo(track) {
+    /**
+     * Get authenticated status
+     */
+    getAuthStatus() {
         return {
-            id: track.id || track.videoId,
-            title: track.title || track.name,
-            artist: this.extractArtistName(track),
-            album: track.album?.name || 'Unknown Album',
-            duration: track.duration?.text || track.duration || 'Unknown'
+            authenticated: this.isAuthenticated,
+            hasApi: !!this.ytma,
+            quotaExceeded: this.quotaExceeded,
+            message: this.isAuthenticated 
+                ? 'YouTube Music authenticated with cookies' 
+                : 'YouTube Music not authenticated'
         };
     }
 
-    // Method to validate if YouTube Music API is properly set up
+    /**
+     * Method to validate if YouTube Music API is properly set up
+     */
     async validateSetup() {
         try {
-            return { valid: true, message: 'YouTube Music API ready' };
+            if (this.isAuthenticated && this.ytma) {
+                return { valid: true, message: 'YouTube Music API ready with cookie authentication' };
+            } else {
+                return { 
+                    valid: false, 
+                    message: 'YouTube Music API not initialized. Call initialize() first.',
+                    requiresInitialization: true
+                };
+            }
         } catch (error) {
             return { 
                 valid: false, 
-                message: 'YouTube Music API setup required. Please configure authentication.',
+                message: 'YouTube Music API setup error',
                 error: error.message 
             };
         }

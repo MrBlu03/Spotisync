@@ -119,6 +119,11 @@ body {
     color: #0c5460;
 }
 
+.status-warning {
+    background: #fff3cd;
+    color: #856404;
+}
+
 .status-error {
     background: #f8d7da;
     color: #721c24;
@@ -235,6 +240,9 @@ body {
     border-radius: 8px;
     font-size: 1rem;
     transition: border-color 0.3s ease;
+    width: 100%;
+    max-width: 300px;
+    box-sizing: border-box;
 }
 
 .playlist-select:focus,
@@ -645,6 +653,10 @@ body {
     border-left-color: #ed8936;
 }
 
+.toast.info {
+    border-left-color: #4299e1;
+}
+
 @keyframes slideIn {
     from {
         transform: translateX(100%);
@@ -654,6 +666,62 @@ body {
         transform: translateX(0);
         opacity: 1;
     }
+}
+
+/* Cookie Authentication Styles */
+.cookie-auth-info {
+    text-align: left;
+}
+
+.cookie-auth-info ol {
+    margin: 15px 0;
+    padding-left: 20px;
+}
+
+.cookie-auth-info li {
+    margin-bottom: 8px;
+}
+
+.cookie-input-section {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.cookie-input-section label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.cookie-input-section textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 12px;
+    margin-bottom: 10px;
+    resize: vertical;
+}
+
+.cookie-input-section textarea:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.auth-status {
+    margin-top: 15px;
+    padding: 10px;
+    background: #f0f0f0;
+    border-radius: 6px;
+}
+
+.auth-status span {
+    font-weight: 600;
 }
 
 /* Responsive Design */

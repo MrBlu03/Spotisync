@@ -1,11 +1,13 @@
 {
   "name": "spotisync",
   "version": "1.0.0",
-  "description": "Bidirectional playlist sync between YouTube Music and Spotify with precision matching and artist topic channel prioritization",
-  "main": "src/app.js",
-  "scripts": {
+  "description": "Sync Spotify playlists to YouTube Music using cookie-based authentication - no API quotas, no complex OAuth setup",
+  "main": "src/app.js",  "scripts": {
     "start": "node src/app.js",
-    "dev": "nodemon src/app.js"
+    "dev": "nodemon src/app.js",
+    "start:all": "node src/app.js",
+    "setup": "node scripts/interactive-setup.js",
+    "setup:manual": "echo 'Run: python scripts/setup-ytmusic.py to configure YouTube Music authentication'"
   },
   "keywords": [
     "spotify",
@@ -21,13 +23,12 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "fs-extra": "^11.1.1",
     "googleapis": "^149.0.0",
     "node-fetch": "^3.3.2",
     "path": "^0.12.7",
-    "spotify-web-api-node": "^5.0.2"
-  },
-  "devDependencies": {
+    "spotify-web-api-node": "^5.0.2",
+    "youtube-music-ts-api": "^1.8.4"
+  },  "devDependencies": {
     "nodemon": "^3.0.1"
   }
 }
