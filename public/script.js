@@ -57,13 +57,44 @@ class SpotisyncApp {
 
         document.getElementById('new-sync-btn').addEventListener('click', () => {
             this.resetApp();
-        });
-
-        // Tabs
+        });        // Tabs
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 this.switchTab(e.target.dataset.tab);
             });        });
+
+        // Cookie Monitor Controls
+        document.getElementById('start-monitor-btn').addEventListener('click', () => {
+            this.startCookieMonitor();
+        });
+
+        document.getElementById('stop-monitor-btn').addEventListener('click', () => {
+            this.stopCookieMonitor();
+        });
+
+        document.getElementById('restart-monitor-btn').addEventListener('click', () => {
+            this.restartCookieMonitor();
+        });
+
+        document.getElementById('refresh-cookies-btn').addEventListener('click', () => {
+            this.refreshCookies();
+        });
+
+        document.getElementById('check-health-btn').addEventListener('click', () => {
+            this.checkCookieHealth();
+        });
+
+        document.getElementById('clear-notifications-btn').addEventListener('click', () => {
+            this.clearNotifications();
+        });
+
+        // Initialize cookie monitor status
+        this.updateCookieMonitorStatus();
+        
+        // Set up periodic status updates every 30 seconds
+        setInterval(() => {
+            this.updateCookieMonitorStatus();
+        }, 30000);
         }
 
     checkUrlParams() {
@@ -1646,8 +1677,246 @@ class SpotisyncApp {
         } catch (error) {
             console.error('Error applying custom match:', error);
             this.hideLoading();
-            this.showToast('Failed to apply custom match: ' + error.message, 'error');
-            return false;
+            this.showToast('Failed to apply custom match: ' + error.message, 'error');        return false;
+        }
+    }
+
+    // Cookie Monitor Methods
+    async updateCookieMonitorStatus() {
+        try {
+            const response = await fetch('/api/cookie-monitor/status');
+            const status = await response.json();
+            
+            // Update status badge
+            const statusElement = document.getElementById('monitor-status');
+            statusElement.textContent = status.isRunning ? 'Running' : 'Stopped';
+            statusElement.className = `status-badge ${status.isRunning ? 'status-running' : 'status-stopped'}`;
+            
+            // Update cookie health
+            const healthElement = document.getElementById('cookie-health');
+            if (status.status === 'healthy') {
+                healthElement.textContent = 'Healthy';
+                healthElement.className = 'status-badge status-healthy';
+            } else if (status.status === 'cookies_expired') {
+                healthElement.textContent = 'Expired';
+                healthElement.className = 'status-badge status-warning';
+            } else if (status.status === 'error') {
+                healthElement.textContent = 'Error';
+                healthElement.className = 'status-badge status-error';
+            } else {
+                healthElement.textContent = 'Unknown';
+                healthElement.className = 'status-badge status-unknown';
+            }
+            
+            // Update last update time
+            const lastUpdateElement = document.getElementById('last-update');
+            if (status.lastUpdate) {
+                const date = new Date(status.lastUpdate);
+                lastUpdateElement.textContent = date.toLocaleString();
+            } else {
+                lastUpdateElement.textContent = 'Never';
+            }
+            
+            // Update button visibility
+            const startBtn = document.getElementById('start-monitor-btn');
+            const stopBtn = document.getElementById('stop-monitor-btn');
+            
+            if (status.isRunning) {
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'inline-flex';
+            } else {
+                startBtn.style.display = 'inline-flex';
+                stopBtn.style.display = 'none';
+            }
+            
+            // Update notifications
+            this.updateNotifications(status.notifications || []);
+            
+        } catch (error) {
+            console.error('Error updating cookie monitor status:', error);
+        }
+    }
+
+    updateNotifications(notifications) {
+        const notificationsList = document.getElementById('notifications-list');
+        
+        if (!notifications || notifications.length === 0) {
+            notificationsList.innerHTML = '<p class="no-notifications">No notifications yet</p>';
+            return;
+        }
+        
+        notificationsList.innerHTML = notifications.reverse().map(notification => {
+            const date = new Date(notification.timestamp);
+            const iconMap = {
+                success: 'fas fa-check-circle',
+                warning: 'fas fa-exclamation-triangle', 
+                error: 'fas fa-times-circle',
+                info: 'fas fa-info-circle'
+            };
+            
+            return `
+                <div class="notification-item ${notification.type}">
+                    <div class="notification-icon">
+                        <i class="${iconMap[notification.type] || 'fas fa-circle'}"></i>
+                    </div>
+                    <div class="notification-content">
+                        <div class="notification-message">${notification.message}</div>
+                        <div class="notification-time">${date.toLocaleString()}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async startCookieMonitor() {
+        try {
+            this.showLoading('Starting Chrome Debug Service...');
+            
+            const response = await fetch('/api/cookie-monitor/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                this.showToast('Cookie monitor started successfully!', 'success');
+                await this.updateCookieMonitorStatus();
+            } else {
+                this.showToast(`Failed to start monitor: ${result.error || 'Unknown error'}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('Error starting cookie monitor:', error);
+            this.showToast('Failed to start cookie monitor', 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async stopCookieMonitor() {
+        try {
+            this.showLoading('Stopping Chrome Debug Service...');
+            
+            const response = await fetch('/api/cookie-monitor/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                this.showToast('Cookie monitor stopped successfully!', 'success');
+                await this.updateCookieMonitorStatus();
+            } else {
+                this.showToast(`Failed to stop monitor: ${result.error || 'Unknown error'}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('Error stopping cookie monitor:', error);
+            this.showToast('Failed to stop cookie monitor', 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async restartCookieMonitor() {
+        try {
+            this.showLoading('Restarting Chrome Debug Service...');
+            
+            const response = await fetch('/api/cookie-monitor/restart', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                this.showToast('Cookie monitor restarted successfully!', 'success');
+                await this.updateCookieMonitorStatus();
+            } else {
+                this.showToast(`Failed to restart monitor: ${result.error || 'Unknown error'}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('Error restarting cookie monitor:', error);
+            this.showToast('Failed to restart cookie monitor', 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async refreshCookies() {
+        try {
+            this.showLoading('Refreshing YouTube Music cookies...');
+            
+            const response = await fetch('/api/cookie-monitor/refresh-cookies', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                this.showToast('Cookies refreshed successfully!', 'success');
+                await this.updateCookieMonitorStatus();
+            } else {
+                this.showToast(`Failed to refresh cookies: ${result.error || 'Unknown error'}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('Error refreshing cookies:', error);
+            this.showToast('Failed to refresh cookies', 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async checkCookieHealth() {
+        try {
+            this.showLoading('Checking cookie health...');
+            
+            const response = await fetch('/api/cookie-monitor/check-health', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                this.showToast('Cookie health check completed!', 'success');
+                await this.updateCookieMonitorStatus();
+            } else {
+                this.showToast(`Health check failed: ${result.error || 'Unknown error'}`, 'error');
+            }
+            
+        } catch (error) {
+            console.error('Error checking cookie health:', error);
+            this.showToast('Failed to check cookie health', 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async clearNotifications() {
+        try {
+            const response = await fetch('/api/cookie-monitor/notifications', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                this.showToast('Notifications cleared!', 'info');
+                await this.updateCookieMonitorStatus();
+            } else {
+                this.showToast('Failed to clear notifications', 'error');
+            }
+            
+        } catch (error) {
+            console.error('Error clearing notifications:', error);
+            this.showToast('Failed to clear notifications', 'error');
         }
     }
 }

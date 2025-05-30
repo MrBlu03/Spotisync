@@ -6,6 +6,7 @@ require('dotenv').config();
 
 const SpotifyService = require('./services/spotifyServices');
 const SyncService = require('./services/syncService');
+const CookieMonitorService = require('./services/cookieMonitorService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,6 +22,9 @@ const spotifyService = new SpotifyService();
 // const youtubeMusicService = new YouTubeMusicService();
 let youtubeMusicService = null; // Will be initialized lazily
 const syncService = new SyncService(spotifyService, null); // Pass null for now
+
+// Initialize Cookie Monitor Service
+const cookieMonitor = new CookieMonitorService();
 
 // Load the YouTube Music service factory
 const createYouTubeMusicService = require('./services/youtubeMusicServiceFactory');
@@ -482,6 +486,121 @@ app.get('/api/auth/status', (req, res) => {
             authenticated: youtubeMusicService.isAuthenticated
         }
     });
+});
+
+// Cookie Monitor API endpoints
+app.get('/api/cookie-monitor/status', (req, res) => {
+    try {
+        const status = cookieMonitor.getStatus();
+        res.json(status);
+    } catch (error) {
+        console.error('Error getting cookie monitor status:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/cookie-monitor/cookie-status', async (req, res) => {
+    try {
+        const cookieStatus = await cookieMonitor.getCookieStatus();
+        res.json(cookieStatus);
+    } catch (error) {
+        console.error('Error getting cookie status:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/cookie-monitor/start', async (req, res) => {
+    try {
+        const result = await cookieMonitor.start();
+        if (result) {
+            // Establish connection between SyncService and ChromeDebugService for transfer state protection
+            if (cookieMonitor.chromeService) {
+                syncService.setChromeDebugService(cookieMonitor.chromeService);
+                console.log('🔗 Connected SyncService to ChromeDebugService for transfer state protection');
+            }
+            
+            res.json({ success: true, message: 'Cookie monitoring started' });
+        } else {
+            res.status(500).json({ error: 'Failed to start cookie monitoring' });
+        }
+    } catch (error) {
+        console.error('Error starting cookie monitor:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/cookie-monitor/stop', async (req, res) => {
+    try {
+        await cookieMonitor.stop();
+        
+        // Disconnect ChromeDebugService from SyncService
+        syncService.setChromeDebugService(null);
+        console.log('🔌 Disconnected ChromeDebugService from SyncService');
+        
+        res.json({ success: true, message: 'Cookie monitoring stopped' });
+    } catch (error) {
+        console.error('Error stopping cookie monitor:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/cookie-monitor/restart', async (req, res) => {
+    try {
+        await cookieMonitor.restart();
+        res.json({ success: true, message: 'Cookie monitoring restarted' });
+    } catch (error) {
+        console.error('Error restarting cookie monitor:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/cookie-monitor/refresh-cookies', async (req, res) => {
+    try {
+        const result = await cookieMonitor.refreshCookies();
+        if (result.success) {
+            res.json(result);
+        } else {
+            res.status(500).json(result);
+        }
+    } catch (error) {
+        console.error('Error refreshing cookies:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/cookie-monitor/check-health', async (req, res) => {
+    try {
+        const result = await cookieMonitor.checkCookieHealth();
+        if (result.success) {
+            res.json(result);
+        } else {
+            res.status(500).json(result);
+        }
+    } catch (error) {
+        console.error('Error checking cookie health:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/cookie-monitor/notifications', (req, res) => {
+    try {
+        const count = parseInt(req.query.count) || 10;
+        const notifications = cookieMonitor.getNotifications(count);
+        res.json(notifications);
+    } catch (error) {
+        console.error('Error getting notifications:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.delete('/api/cookie-monitor/notifications', (req, res) => {
+    try {
+        cookieMonitor.clearNotifications();
+        res.json({ success: true, message: 'Notifications cleared' });
+    } catch (error) {
+        console.error('Error clearing notifications:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Health check

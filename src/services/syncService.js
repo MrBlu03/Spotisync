@@ -1,8 +1,19 @@
 class SyncService {
-    constructor(spotifyService, youtubeMusicService) {
+    constructor(spotifyService, youtubeMusicService, chromeDebugService = null) {
         this.spotify = spotifyService;
         this.youtubeMusic = youtubeMusicService;
-    }    async previewSync(youtubePlaylistId, spotifyPlaylistId, progressCallback = null) {
+        this.chromeDebugService = chromeDebugService;
+    }
+
+    /**
+     * Set the Chrome Debug Service reference for transfer state protection
+     * @param {ChromeDebugService} chromeDebugService - The Chrome Debug Service instance
+     */
+    setChromeDebugService(chromeDebugService) {
+        this.chromeDebugService = chromeDebugService;
+    }
+
+    async previewSync(youtubePlaylistId, spotifyPlaylistId, progressCallback = null) {
         try {
             console.log(`Previewing sync from YouTube playlist ${youtubePlaylistId} to Spotify playlist ${spotifyPlaylistId}`);
 
@@ -219,9 +230,7 @@ class SyncService {
             newPlaylistName,
             removeDuplicates = false,
             previewResults // Added parameter for preview results
-        } = options;
-
-        try {
+        } = options;        try {
             console.log('Starting sync execution with options:', {
                 youtubePlaylistId,
                 spotifyPlaylistId,
@@ -229,6 +238,12 @@ class SyncService {
                 createNewPlaylist,
                 newPlaylistName
             });
+
+            // Activate transfer state protection to prevent cookie refresh during sync
+            if (this.chromeDebugService) {
+                console.log('🔒 Activating transfer state protection...');
+                this.chromeDebugService.setTransferInProgress(true);
+            }
 
             // Validate authentication
             if (!this.spotify.isAuthenticated) {
@@ -480,11 +495,22 @@ class SyncService {
                     } catch (error) {
                         console.error('Error removing duplicates:', error);
                     }
-                }
+                }            }
+
+            // Deactivate transfer state protection
+            if (this.chromeDebugService) {
+                console.log('🔓 Deactivating transfer state protection...');
+                this.chromeDebugService.setTransferInProgress(false);
             }
 
             return results;
         } catch (error) {
+            // Deactivate transfer state protection on error
+            if (this.chromeDebugService) {
+                console.log('🔓 Deactivating transfer state protection (error)...');
+                this.chromeDebugService.setTransferInProgress(false);
+            }
+            
             console.error('Error during sync execution:', error);
             throw error;
         }
@@ -858,9 +884,13 @@ class SyncService {
             createNewPlaylist,
             newPlaylistName,
             previewResults
-        } = options;
+        } = options;        try {
+            // Activate transfer state protection to prevent cookie refresh during sync
+            if (this.chromeDebugService) {
+                console.log('🔒 Activating transfer state protection...');
+                this.chromeDebugService.setTransferInProgress(true);
+            }
 
-        try {
             // Validate authentication
             const authStatus = await this.youtubeMusic.validateSetup();
             if (!authStatus.valid) {
@@ -958,10 +988,16 @@ class SyncService {
             const successCount = processedTracks.added.length;
             const failedCount = processedTracks.failed.length;
             
-            console.log(`🎉 Reverse sync complete! ${successCount}/${totalApproved} tracks added successfully (${failedCount} failed)`);
+            console.log(`🎉 Reverse sync complete! ${successCount}/${totalApproved} tracks added successfully (${failedCount} failed)`);            // Build non-transferred data from preview results if available
+            const nonTransferred = this.buildNonTransferredData(previewResults, approvedTracks);
 
-            // Build non-transferred data from preview results if available
-            const nonTransferred = this.buildNonTransferredData(previewResults, approvedTracks);            return {
+            // Deactivate transfer state protection
+            if (this.chromeDebugService) {
+                console.log('🔓 Deactivating transfer state protection...');
+                this.chromeDebugService.setTransferInProgress(false);
+            }
+
+            return {
                 playlistId: targetPlaylistId,
                 tracksAdded: processedTracks.added,
                 tracksFailed: processedTracks.failed,
@@ -977,6 +1013,12 @@ class SyncService {
             };
 
         } catch (error) {
+            // Deactivate transfer state protection on error
+            if (this.chromeDebugService) {
+                console.log('🔓 Deactivating transfer state protection (error)...');
+                this.chromeDebugService.setTransferInProgress(false);
+            }
+            
             console.error('❌ Error during reverse sync execution:', error);
             throw error;
         }

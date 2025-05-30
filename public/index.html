@@ -40,6 +40,78 @@
                         </button>
                         <span id="youtube-status" class="status-indicator"></span>
                     </div>
+                </div>            </section>
+
+            <!-- Cookie Monitor Section -->
+            <section id="cookie-monitor-section" class="card">
+                <h2><i class="fas fa-shield-alt"></i> Cookie Monitor</h2>
+                <div class="cookie-monitor-content">
+                    <div class="monitor-status">
+                        <div class="status-row">
+                            <span class="status-label">Service Status:</span>
+                            <span id="monitor-status" class="status-badge status-stopped">Stopped</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Cookie Health:</span>
+                            <span id="cookie-health" class="status-badge status-unknown">Unknown</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Last Update:</span>
+                            <span id="last-update">Never</span>
+                        </div>
+                    </div>
+                    
+                    <div class="monitor-controls">
+                        <button id="start-monitor-btn" class="btn btn-success">
+                            <i class="fas fa-play"></i> Start Chrome Monitor
+                        </button>
+                        <button id="stop-monitor-btn" class="btn btn-danger" style="display: none;">
+                            <i class="fas fa-stop"></i> Stop Monitor
+                        </button>
+                        <button id="restart-monitor-btn" class="btn btn-warning">
+                            <i class="fas fa-redo"></i> Restart
+                        </button>
+                        <button id="refresh-cookies-btn" class="btn btn-secondary">
+                            <i class="fas fa-refresh"></i> Refresh Cookies
+                        </button>
+                        <button id="check-health-btn" class="btn btn-info">
+                            <i class="fas fa-heartbeat"></i> Check Health
+                        </button>
+                    </div>
+                    
+                    <div class="monitor-info">
+                        <h4><i class="fas fa-info-circle"></i> Auto Cookie Refresh</h4>
+                        <p>This system automatically monitors your YouTube Music cookies and refreshes them when needed. It runs Chrome in the background with debugging enabled to keep your authentication fresh.</p>
+                        
+                        <div class="info-features">
+                            <div class="feature-item">
+                                <i class="fas fa-clock"></i>
+                                <span>Checks cookies every 5 minutes</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-heart"></i>
+                                <span>Sends heartbeat every 30 minutes</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-shield"></i>
+                                <span>Auto-recovers from failures</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-robot"></i>
+                                <span>Runs completely in background</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="notifications-section">
+                        <h4><i class="fas fa-bell"></i> Recent Notifications</h4>
+                        <div id="notifications-list" class="notifications-list">
+                            <p class="no-notifications">No notifications yet</p>
+                        </div>
+                        <button id="clear-notifications-btn" class="btn btn-sm btn-outline">
+                            <i class="fas fa-trash"></i> Clear All
+                        </button>
+                    </div>
                 </div>
             </section>
 
