@@ -7,6 +7,7 @@ require('dotenv').config();
 const SpotifyService = require('./services/spotifyServices');
 const SyncService = require('./services/syncService');
 const CookieMonitorService = require('./services/cookieMonitorService');
+const PlaylistLinkService = require('./services/playlistLinkService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +23,9 @@ const spotifyService = new SpotifyService();
 // const youtubeMusicService = new YouTubeMusicService();
 let youtubeMusicService = null; // Will be initialized lazily
 const syncService = new SyncService(spotifyService, null); // Pass null for now
+
+// Initialize Playlist Link Service (will be initialized after YouTube Music service)
+let playlistLinkService = null;
 
 // Initialize Cookie Monitor Service
 const cookieMonitor = new CookieMonitorService();
@@ -39,9 +43,28 @@ const createYouTubeMusicService = require('./services/youtubeMusicServiceFactory
         
         // Update sync service with the initialized YouTube Music service
         syncService.youtubeMusic = youtubeMusicService;
+          // Initialize Playlist Link Service
+        playlistLinkService = new PlaylistLinkService(spotifyService, youtubeMusicService, syncService);
+        await playlistLinkService.initialize();
+        console.log('✅ Playlist Link Service initialized successfully');
+        
+        // Start cookie monitor automatically
+        console.log('🔍 Starting YouTube Music cookie monitor...');
+        const cookieMonitorResult = await cookieMonitor.start();
+        if (cookieMonitorResult.success) {
+            console.log('✅ Cookie monitor started successfully');
+            // Connect the chrome service to sync service for enhanced functionality
+            if (cookieMonitor.chromeService) {
+                syncService.setChromeDebugService(cookieMonitor.chromeService);
+                console.log('✅ Chrome debug service connected to sync service');
+            }
+        } else {
+            console.log('⚠️  Cookie monitor failed to start:', cookieMonitorResult.error);
+            console.log('ℹ️  You can try starting it manually from the web interface');
+        }
         
     } catch (error) {
-        console.error('❌ Failed to initialize YouTube Music service:', error.message);
+        console.error('❌ Failed to initialize services:', error.message);
         console.log('ℹ️  Make sure oauth.json file exists in the project root with valid cookies');
     }
 })();
@@ -599,6 +622,229 @@ app.delete('/api/cookie-monitor/notifications', (req, res) => {
         res.json({ success: true, message: 'Notifications cleared' });
     } catch (error) {
         console.error('Error clearing notifications:', error);
+        res.status(500).json({ error: error.message });    }
+});
+
+// ============================================================================
+// PLAYLIST LINKING API ENDPOINTS
+// ============================================================================
+
+// Get all playlist links
+app.get('/api/playlist-links', async (req, res) => {
+    try {
+        if (!playlistLinkService) {
+            return res.status(503).json({ error: 'Playlist link service not initialized' });
+        }
+        
+        const links = await playlistLinkService.getAllPlaylistLinks();
+        res.json(links);
+    } catch (error) {
+        console.error('Error fetching playlist links:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get a specific playlist link
+app.get('/api/playlist-links/:linkId', async (req, res) => {
+    try {
+        if (!playlistLinkService) {
+            return res.status(503).json({ error: 'Playlist link service not initialized' });
+        }
+        
+        const { linkId } = req.params;
+        const link = await playlistLinkService.getPlaylistLink(linkId);
+        
+        if (!link) {
+            return res.status(404).json({ error: 'Playlist link not found' });
+        }
+        
+        res.json(link);
+    } catch (error) {
+        console.error('Error fetching playlist link:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Create a new playlist link
+app.post('/api/playlist-links', async (req, res) => {
+    try {
+        if (!playlistLinkService) {
+            return res.status(503).json({ error: 'Playlist link service not initialized' });
+        }
+        
+        const {
+            spotifyPlaylistId,
+            youtubePlaylistId,
+            syncDirection = 'bidirectional',
+            autoSync = false,
+            syncInterval = 24,
+            conflictResolution = 'manual',
+            performInitialSync = false,
+            initialSyncDirection
+        } = req.body;
+        
+        // Validate required fields
+        if (!spotifyPlaylistId || !youtubePlaylistId) {
+            return res.status(400).json({ 
+                error: 'Both spotifyPlaylistId and youtubePlaylistId are required' 
+            });
+        }
+        
+        const linkData = {
+            spotifyPlaylistId,
+            youtubePlaylistId,
+            syncDirection,
+            autoSync,
+            syncInterval,
+            conflictResolution,
+            performInitialSync,
+            initialSyncDirection
+        };
+        
+        const newLink = await playlistLinkService.createPlaylistLink(linkData);
+        res.status(201).json(newLink);
+        
+    } catch (error) {
+        console.error('Error creating playlist link:', error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Update a playlist link
+app.put('/api/playlist-links/:linkId', async (req, res) => {
+    try {
+        if (!playlistLinkService) {
+            return res.status(503).json({ error: 'Playlist link service not initialized' });
+        }
+        
+        const { linkId } = req.params;
+        const updates = req.body;
+        
+        const updatedLink = await playlistLinkService.updatePlaylistLink(linkId, updates);
+        res.json(updatedLink);
+        
+    } catch (error) {
+        console.error('Error updating playlist link:', error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Delete a playlist link
+app.delete('/api/playlist-links/:linkId', async (req, res) => {
+    try {
+        if (!playlistLinkService) {
+            return res.status(503).json({ error: 'Playlist link service not initialized' });
+        }
+        
+        const { linkId } = req.params;
+        const deletedLink = await playlistLinkService.deletePlaylistLink(linkId);
+        res.json(deletedLink);
+        
+    } catch (error) {
+        console.error('Error deleting playlist link:', error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Manually trigger sync for a playlist link
+app.post('/api/playlist-links/:linkId/sync', async (req, res) => {
+    try {
+        if (!playlistLinkService) {
+            return res.status(503).json({ error: 'Playlist link service not initialized' });
+        }
+        
+        const { linkId } = req.params;
+        const { direction } = req.body; // Optional: override sync direction
+        
+        const result = await playlistLinkService.syncPlaylistLink(linkId, direction);
+        res.json(result);
+        
+    } catch (error) {
+        console.error('Error syncing playlist link:', error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Get sync history for a playlist link
+app.get('/api/playlist-links/:linkId/history', async (req, res) => {
+    try {
+        if (!playlistLinkService) {
+            return res.status(503).json({ error: 'Playlist link service not initialized' });
+        }
+        
+        const { linkId } = req.params;
+        const { limit = 50 } = req.query;
+        
+        const history = await playlistLinkService.getSyncHistory(linkId, parseInt(limit));
+        res.json(history);
+        
+    } catch (error) {
+        console.error('Error fetching sync history:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Check if a playlist is linked
+app.get('/api/playlists/:playlistId/links', async (req, res) => {
+    try {
+        if (!playlistLinkService) {
+            return res.status(503).json({ error: 'Playlist link service not initialized' });
+        }
+        
+        const { playlistId } = req.params;
+        const { platform } = req.query; // 'spotify' or 'youtube'
+        
+        if (!platform || !['spotify', 'youtube'].includes(platform)) {
+            return res.status(400).json({ 
+                error: 'Platform query parameter is required (spotify or youtube)' 
+            });
+        }
+        
+        const links = await playlistLinkService.getLinksForPlaylist(playlistId, platform);
+        const isLinked = await playlistLinkService.isPlaylistLinked(playlistId, platform);
+        
+        res.json({
+            playlistId,
+            platform,
+            isLinked,
+            links
+        });
+        
+    } catch (error) {
+        console.error('Error checking playlist links:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get overall statistics
+app.get('/api/playlist-links/stats', async (req, res) => {
+    try {
+        if (!playlistLinkService) {
+            return res.status(503).json({ error: 'Playlist link service not initialized' });
+        }
+        
+        const stats = await playlistLinkService.getOverallStatistics();
+        res.json(stats);
+        
+    } catch (error) {
+        console.error('Error fetching statistics:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get all sync history (across all links)
+app.get('/api/sync-history', async (req, res) => {
+    try {
+        if (!playlistLinkService) {
+            return res.status(503).json({ error: 'Playlist link service not initialized' });
+        }
+        
+        const { limit = 100 } = req.query;
+        const history = await playlistLinkService.getSyncHistory(null, parseInt(limit));
+        res.json(history);
+        
+    } catch (error) {
+        console.error('Error fetching sync history:', error);
         res.status(500).json({ error: error.message });
     }
 });

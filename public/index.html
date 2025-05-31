@@ -8,16 +8,22 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div class="container">
-        <header class="header">
+    <div class="container">        <header class="header">
             <div class="header-content">
                 <h1><i class="fas fa-sync-alt"></i> Spotisync</h1>
                 <p>Sync your YouTube Music playlists to Spotify with precision</p>
+                <div class="header-nav">
+                    <button id="one-time-sync-tab" class="nav-tab active">
+                        <i class="fas fa-play"></i> One-Time Sync
+                    </button>
+                    <button id="playlist-links-tab" class="nav-tab">
+                        <i class="fas fa-link"></i> Playlist Links
+                    </button>
+                </div>
             </div>
         </header>
 
-        <main class="main-content">
-            <!-- Authentication Section -->
+        <main class="main-content">            <!-- Authentication Section -->
             <section id="auth-section" class="card">
                 <h2><i class="fas fa-key"></i> Authentication</h2>
                 <div class="auth-status">
@@ -30,17 +36,16 @@
                             <i class="fas fa-sign-in-alt"></i> Connect Spotify
                         </button>
                         <span id="spotify-status" class="status-indicator"></span>
-                    </div>                    <div class="service-auth">
+                    </div>
+                    <div class="service-auth">
                         <div class="service-info">
                             <i class="fab fa-youtube youtube-icon"></i>
                             <span>YouTube Music</span>
                         </div>
-                        <button id="youtube-auth-btn" class="btn btn-youtube">
-                            <i class="fas fa-info-circle"></i> Cookie Setup Info
-                        </button>
-                        <span id="youtube-status" class="status-indicator"></span>
+                        <span id="youtube-status" class="status-indicator">Automatically configured</span>
                     </div>
-                </div>            </section>
+                </div>
+            </section>
 
             <!-- Cookie Monitor Section -->
             <section id="cookie-monitor-section" class="card">
@@ -111,6 +116,130 @@
                         <button id="clear-notifications-btn" class="btn btn-sm btn-outline">
                             <i class="fas fa-trash"></i> Clear All
                         </button>
+                    </div>
+                </div>            </section>
+
+            <!-- Playlist Linking Section -->
+            <section id="playlist-linking-section" class="card" style="display: none;">
+                <h2><i class="fas fa-link"></i> Playlist Links Management</h2>
+                
+                <!-- Create New Link Form -->
+                <div class="create-link-form">
+                    <h3><i class="fas fa-plus-circle"></i> Create New Playlist Link</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="link-sync-direction">Sync Direction:</label>
+                            <select id="link-sync-direction" class="input-field">
+                                <option value="bidirectional">Bidirectional Sync</option>
+                                <option value="spotify-to-youtube">Spotify → YouTube Music</option>
+                                <option value="youtube-to-spotify">YouTube Music → Spotify</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="link-auto-sync">Auto Sync Interval:</label>
+                            <select id="link-auto-sync" class="input-field">
+                                <option value="0">Manual Only</option>
+                                <option value="3600000">Every Hour</option>
+                                <option value="21600000">Every 6 Hours</option>
+                                <option value="43200000">Every 12 Hours</option>
+                                <option value="86400000" selected>Daily</option>
+                                <option value="604800000">Weekly</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="link-spotify-playlist">Spotify Playlist:</label>
+                            <select id="link-spotify-playlist" class="input-field">
+                                <option value="">Select Spotify playlist...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="link-youtube-playlist">YouTube Music Playlist:</label>
+                            <select id="link-youtube-playlist" class="input-field">
+                                <option value="">Select YouTube Music playlist...</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button id="create-link-btn" class="btn btn-primary" disabled>
+                            <i class="fas fa-link"></i> Create Link
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Existing Links -->
+                <div class="existing-links">
+                    <div class="section-header">
+                        <h3><i class="fas fa-list"></i> Existing Playlist Links</h3>
+                        <div class="header-actions">
+                            <button id="refresh-links-btn" class="btn btn-sm btn-secondary">
+                                <i class="fas fa-refresh"></i> Refresh
+                            </button>
+                            <button id="sync-all-links-btn" class="btn btn-sm btn-success">
+                                <i class="fas fa-sync"></i> Sync All
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="playlist-links-list" class="links-list">
+                        <div class="no-links-message">
+                            <i class="fas fa-info-circle"></i>
+                            <p>No playlist links created yet. Create your first link above to get started!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Link Statistics -->
+                <div class="link-stats">
+                    <h3><i class="fas fa-chart-bar"></i> Sync Statistics</h3>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fas fa-link"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="total-links">0</span>
+                                <span class="stat-label">Total Links</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="successful-syncs">0</span>
+                                <span class="stat-label">Successful Syncs</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fas fa-exclamation-circle"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="failed-syncs">0</span>
+                                <span class="stat-label">Failed Syncs</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fas fa-music"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-value" id="total-tracks-synced">0</span>
+                                <span class="stat-label">Tracks Synced</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sync History -->
+                <div class="sync-history">
+                    <div class="section-header">
+                        <h3><i class="fas fa-history"></i> Recent Sync History</h3>
+                        <button id="view-all-history-btn" class="btn btn-sm btn-outline">
+                            <i class="fas fa-external-link-alt"></i> View All
+                        </button>
+                    </div>
+                    <div id="sync-history-list" class="history-list">
+                        <div class="no-history-message">
+                            <i class="fas fa-info-circle"></i>
+                            <p>No sync history available yet.</p>
+                        </div>
                     </div>
                 </div>
             </section>

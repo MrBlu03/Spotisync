@@ -1,0 +1,432 @@
+[
+  {
+    "id": "mbbj7f6456znyoosb3v",
+    "playlistLinkId": "mbbir55lugqjsb19c3a",
+    "syncDirection": "bidirectional",
+    "status": "success",
+    "tracksProcessed": 1,
+    "tracksAdded": 1,
+    "tracksFailed": 0,
+    "duration": 2726,
+    "error": null,
+    "details": {
+      "type": "bidirectional",
+      "spotifyToYoutube": {
+        "success": true,
+        "tracksProcessed": 1,
+        "tracksAdded": 1,
+        "tracksFailed": 0,
+        "details": {
+          "type": "spotify-to-youtube",
+          "spotifyTrackCount": 10,
+          "youtubeTrackCount": 9,
+          "perfectMatches": 0,
+          "uncertainMatches": 1,
+          "noMatches": 0,
+          "summary": {
+            "totalApproved": 1,
+            "successfullyAdded": 1,
+            "failed": 0,
+            "duplicatesRemoved": 0,
+            "nonTransferredCount": 0
+          }
+        }
+      },
+      "youtubeToSpotify": {
+        "success": true,
+        "tracksProcessed": 0,
+        "tracksAdded": 0,
+        "tracksFailed": 0,
+        "details": {
+          "type": "youtube-to-spotify",
+          "message": "No tracks available for automatic sync",
+          "totalTracks": 9,
+          "uncertainMatches": 0,
+          "noMatches": 0
+        }
+      }
+    },
+    "timestamp": "2025-05-31T01:06:42.700Z"
+  },
+  {
+    "id": "mbbj70uec4fndougry8",
+    "playlistLinkId": "mbbir55lugqjsb19c3a",
+    "syncDirection": "bidirectional",
+    "status": "success",
+    "tracksProcessed": 1,
+    "tracksAdded": 1,
+    "tracksFailed": 0,
+    "duration": 979,
+    "error": null,
+    "details": {
+      "type": "bidirectional",
+      "spotifyToYoutube": {
+        "success": true,
+        "tracksProcessed": 0,
+        "tracksAdded": 0,
+        "tracksFailed": 0,
+        "details": {
+          "type": "spotify-to-youtube",
+          "message": "No tracks available for automatic sync",
+          "totalTracks": 9,
+          "uncertainMatches": 0,
+          "noMatches": 0
+        }
+      },
+      "youtubeToSpotify": {
+        "success": true,
+        "tracksProcessed": 1,
+        "tracksAdded": 1,
+        "tracksFailed": 0,
+        "details": {
+          "type": "youtube-to-spotify",
+          "youtubeTrackCount": 10,
+          "spotifyTrackCount": 9,
+          "perfectMatches": 1,
+          "uncertainMatches": 0,
+          "noMatches": 0,
+          "summary": {
+            "totalApproved": 1,
+            "successfullyAdded": 1,
+            "failed": 0,
+            "duplicatesRemoved": 0,
+            "nonTransferredCount": 0
+          }
+        }
+      }
+    },
+    "timestamp": "2025-05-31T01:06:24.134Z"
+  },
+  {
+    "id": "mbbiz5egl5yxeky2cgl",
+    "playlistLinkId": "mbbir55lugqjsb19c3a",
+    "syncDirection": "bidirectional",
+    "status": "failed",
+    "tracksProcessed": 0,
+    "tracksAdded": 0,
+    "tracksFailed": 0,
+    "duration": 2,
+    "error": "Not authenticated with Spotify",
+    "details": {},
+    "timestamp": "2025-05-31T01:00:16.792Z"
+  },
+  {
+    "id": "mbbiz5dq8yp4etugnbx",
+    "playlistLinkId": "mbbiqh7riixvxrz82zr",
+    "syncDirection": "bidirectional",
+    "status": "failed",
+    "tracksProcessed": 0,
+    "tracksAdded": 0,
+    "tracksFailed": 0,
+    "duration": 2,
+    "error": "Not authenticated with Spotify",
+    "details": {},
+    "timestamp": "2025-05-31T01:00:16.766Z"
+  },
+  {
+    "id": "mbbiz5cxnmey4czmnl9",
+    "playlistLinkId": "mbbiq8p8484e9p8k0bb",
+    "syncDirection": "bidirectional",
+    "status": "failed",
+    "tracksProcessed": 0,
+    "tracksAdded": 0,
+    "tracksFailed": 0,
+    "duration": 3,
+    "error": "Not authenticated with Spotify",
+    "details": {},
+    "timestamp": "2025-05-31T01:00:16.737Z"
+  },
+  {
+    "id": "mbbiz5c31o2f8044tn",
+    "playlistLinkId": "mbbiq1u3uyxj57gc89a",
+    "syncDirection": "bidirectional",
+    "status": "failed",
+    "tracksProcessed": 0,
+    "tracksAdded": 0,
+    "tracksFailed": 0,
+    "duration": 5,
+    "error": "Not authenticated with Spotify",
+    "details": {},
+    "timestamp": "2025-05-31T01:00:16.707Z"
+  },
+  {
+    "id": "mbbirrminm05pr6c0u",
+    "playlistLinkId": "mbbir55lugqjsb19c3a",
+    "syncDirection": "bidirectional",
+    "status": "success",
+    "tracksProcessed": 0,
+    "tracksAdded": 0,
+    "tracksFailed": 0,
+    "duration": 255,
+    "error": null,
+    "details": {
+      "type": "spotify-to-youtube",
+      "message": "No tracks available for automatic sync",
+      "totalTracks": 9,
+      "uncertainMatches": 0,
+      "noMatches": 0
+    },
+    "timestamp": "2025-05-31T00:54:32.346Z"
+  },
+  {
+    "id": "mbbir8h0axl6xqx1suo",
+    "playlistLinkId": "mbbir55lugqjsb19c3a",
+    "syncDirection": "bidirectional",
+    "status": "success",
+    "tracksProcessed": 0,
+    "tracksAdded": 0,
+    "tracksFailed": 0,
+    "duration": 198,
+    "error": null,
+    "details": {
+      "type": "spotify-to-youtube",
+      "message": "No tracks available for automatic sync",
+      "totalTracks": 9,
+      "uncertainMatches": 0,
+      "noMatches": 0
+    },
+    "timestamp": "2025-05-31T00:54:07.524Z"
+  },
+  {
+    "id": "mbbiki202ca2daebpw6",
+    "playlistLinkId": "mbbh39q556aprmzyd9o",
+    "syncDirection": "bidirectional",
+    "status": "success",
+    "tracksProcessed": 1,
+    "tracksAdded": 1,
+    "tracksFailed": 0,
+    "duration": 2157,
+    "error": null,
+    "details": {
+      "type": "spotify-to-youtube",
+      "spotifyTrackCount": 10,
+      "youtubeTrackCount": 9,
+      "perfectMatches": 0,
+      "uncertainMatches": 1,
+      "noMatches": 0,
+      "summary": {
+        "totalApproved": 1,
+        "successfullyAdded": 1,
+        "failed": 0,
+        "duplicatesRemoved": 0,
+        "nonTransferredCount": 0
+      }
+    },
+    "timestamp": "2025-05-31T00:48:53.352Z"
+  },
+  {
+    "id": "mbbijt2mxsu1pcuoe8f",
+    "playlistLinkId": "mbbh39q556aprmzyd9o",
+    "syncDirection": "bidirectional",
+    "status": "success",
+    "tracksProcessed": 1,
+    "tracksAdded": 1,
+    "tracksFailed": 0,
+    "duration": 2542,
+    "error": null,
+    "details": {
+      "type": "spotify-to-youtube",
+      "spotifyTrackCount": 10,
+      "youtubeTrackCount": 9,
+      "perfectMatches": 0,
+      "uncertainMatches": 1,
+      "noMatches": 0,
+      "summary": {
+        "totalApproved": 1,
+        "successfullyAdded": 1,
+        "failed": 0,
+        "duplicatesRemoved": 0,
+        "nonTransferredCount": 0
+      }
+    },
+    "timestamp": "2025-05-31T00:48:20.974Z"
+  },
+  {
+    "id": "mbbiajr83l6sjdscg1i",
+    "playlistLinkId": "mbbh39q556aprmzyd9o",
+    "syncDirection": "bidirectional",
+    "status": "success",
+    "tracksProcessed": 0,
+    "tracksAdded": 0,
+    "tracksFailed": 0,
+    "duration": 606,
+    "error": null,
+    "details": {
+      "type": "spotify-to-youtube",
+      "message": "No tracks available for automatic sync",
+      "totalTracks": 10,
+      "uncertainMatches": 1,
+      "noMatches": 0
+    },
+    "timestamp": "2025-05-31T00:41:08.996Z"
+  },
+  {
+    "id": "mbbi5wy2bbag8hgfgf",
+    "playlistLinkId": "mbbh39q556aprmzyd9o",
+    "syncDirection": "bidirectional",
+    "status": "success",
+    "tracksProcessed": 0,
+    "tracksAdded": 0,
+    "tracksFailed": 0,
+    "duration": 577,
+    "error": null,
+    "details": {
+      "type": "spotify-to-youtube",
+      "message": "No tracks available for automatic sync",
+      "totalTracks": 10,
+      "uncertainMatches": 1,
+      "noMatches": 0
+    },
+    "timestamp": "2025-05-31T00:37:32.810Z"
+  },
+  {
+    "id": "mbbi1cbsqnxypz35ii",
+    "playlistLinkId": "mbbh39q556aprmzyd9o",
+    "syncDirection": "bidirectional",
+    "status": "success",
+    "tracksProcessed": 0,
+    "tracksAdded": 0,
+    "tracksFailed": 0,
+    "duration": 594,
+    "error": null,
+    "details": {
+      "type": "spotify-to-youtube",
+      "message": "No tracks available for automatic sync",
+      "totalTracks": 10,
+      "uncertainMatches": 1,
+      "noMatches": 0
+    },
+    "timestamp": "2025-05-31T00:33:59.464Z"
+  },
+  {
+    "id": "mbbhriyjv3q20g2kscs",
+    "playlistLinkId": "mbbh39q556aprmzyd9o",
+    "syncDirection": "bidirectional",
+    "status": "success",
+    "tracksProcessed": 0,
+    "tracksAdded": 0,
+    "tracksFailed": 0,
+    "duration": 639,
+    "error": null,
+    "details": {
+      "type": "spotify-to-youtube",
+      "message": "No tracks available for automatic sync",
+      "totalTracks": 10,
+      "uncertainMatches": 1,
+      "noMatches": 0
+    },
+    "timestamp": "2025-05-31T00:26:21.499Z"
+  },
+  {
+    "id": "mbbhqx114gqi33eim2w",
+    "playlistLinkId": "mbbh39q556aprmzyd9o",
+    "syncDirection": "bidirectional",
+    "status": "success",
+    "tracksProcessed": 0,
+    "tracksAdded": 0,
+    "tracksFailed": 0,
+    "duration": 730,
+    "error": null,
+    "details": {
+      "type": "spotify-to-youtube",
+      "message": "No tracks available for automatic sync",
+      "totalTracks": 10,
+      "uncertainMatches": 1,
+      "noMatches": 0
+    },
+    "timestamp": "2025-05-31T00:25:53.077Z"
+  },
+  {
+    "id": "mbbho2s8thsj2niztln",
+    "playlistLinkId": "mbbh39q556aprmzyd9o",
+    "syncDirection": "bidirectional",
+    "status": "failed",
+    "tracksProcessed": 0,
+    "tracksAdded": 0,
+    "tracksFailed": 0,
+    "duration": 588,
+    "error": "tracks.map is not a function",
+    "details": {},
+    "timestamp": "2025-05-31T00:23:40.568Z"
+  },
+  {
+    "id": "mbbhny3himqpbey1fcr",
+    "playlistLinkId": "mbbh39q556aprmzyd9o",
+    "syncDirection": "bidirectional",
+    "status": "failed",
+    "tracksProcessed": 0,
+    "tracksAdded": 0,
+    "tracksFailed": 0,
+    "duration": 612,
+    "error": "tracks.map is not a function",
+    "details": {},
+    "timestamp": "2025-05-31T00:23:34.493Z"
+  },
+  {
+    "id": "mbbhhnhm6si3ubm9vcc",
+    "playlistLinkId": "mbbh39q556aprmzyd9o",
+    "syncDirection": "bidirectional",
+    "status": "success",
+    "tracksProcessed": 0,
+    "tracksAdded": 0,
+    "tracksFailed": 0,
+    "duration": 641,
+    "error": null,
+    "details": {
+      "type": "spotify-to-youtube",
+      "message": "No tracks available for automatic sync",
+      "totalTracks": 10,
+      "uncertainMatches": 1,
+      "noMatches": 0
+    },
+    "timestamp": "2025-05-31T00:18:40.810Z"
+  },
+  {
+    "id": "mbbh7evbftfrf3mj78o",
+    "playlistLinkId": "mbbh39q556aprmzyd9o",
+    "syncDirection": "bidirectional",
+    "status": "partial",
+    "tracksProcessed": 10,
+    "tracksAdded": 0,
+    "tracksFailed": 10,
+    "duration": 3298,
+    "error": null,
+    "details": {
+      "type": "spotify-to-youtube",
+      "spotifyTrackCount": 10,
+      "youtubeTrackCount": 9,
+      "summary": {
+        "totalApproved": 10,
+        "successfullyAdded": 0,
+        "failed": 10,
+        "duplicatesRemoved": 0,
+        "nonTransferredCount": 0
+      }
+    },
+    "timestamp": "2025-05-31T00:10:43.079Z"
+  },
+  {
+    "id": "mbbh3mrn6t6e02bkx98",
+    "playlistLinkId": "mbbh39q556aprmzyd9o",
+    "syncDirection": "bidirectional",
+    "status": "partial",
+    "tracksProcessed": 10,
+    "tracksAdded": 0,
+    "tracksFailed": 10,
+    "duration": 3230,
+    "error": null,
+    "details": {
+      "type": "spotify-to-youtube",
+      "spotifyTrackCount": 10,
+      "youtubeTrackCount": 9,
+      "summary": {
+        "totalApproved": 10,
+        "successfullyAdded": 0,
+        "failed": 10,
+        "duplicatesRemoved": 0,
+        "nonTransferredCount": 0
+      }
+    },
+    "timestamp": "2025-05-31T00:07:46.691Z"
+  }
+]

@@ -6,25 +6,25 @@ class SpotisyncApp {
         this.youtubePlayists = [];
         this.customMatches = new Map(); // Store custom matches by trackId
         this.init();
-    }
-
-    init() {
+    }    init() {
         this.setupEventListeners();
         this.checkAuthStatus();
         this.checkUrlParams();
+        this.initializeUI();
+    }
+
+    initializeUI() {
+        // Set default view to one-time sync
+        this.switchToOneTimeSync();
     }
 
     setupEventListeners() {
         // Sync direction
         document.getElementById('sync-direction').addEventListener('change', (e) => {
             this.handleSyncDirectionChange(e.target.value);
-        });
-
-        // Authentication
+        });        // Authentication
         document.getElementById('spotify-auth-btn').addEventListener('click', () => {
             this.authenticateSpotify();
-        });        document.getElementById('youtube-auth-btn').addEventListener('click', () => {
-            this.showYoutubeCookieInfo();
         });
 
         // Playlist selection
@@ -66,35 +66,51 @@ class SpotisyncApp {
         // Cookie Monitor Controls
         document.getElementById('start-monitor-btn').addEventListener('click', () => {
             this.startCookieMonitor();
+        });        // YouTube Music authentication is now automatic via cookie monitoring
+        // Cookie management event listeners removed since UI was simplified
+
+        // Navigation Tabs
+        document.getElementById('one-time-sync-tab').addEventListener('click', () => {
+            this.switchToOneTimeSync();
         });
 
-        document.getElementById('stop-monitor-btn').addEventListener('click', () => {
-            this.stopCookieMonitor();
+        document.getElementById('playlist-links-tab').addEventListener('click', () => {
+            this.switchToPlaylistLinks();
         });
 
-        document.getElementById('restart-monitor-btn').addEventListener('click', () => {
-            this.restartCookieMonitor();
+        // Playlist Linking Event Listeners
+        document.getElementById('link-sync-direction').addEventListener('change', () => {
+            this.updateCreateLinkButton();
         });
 
-        document.getElementById('refresh-cookies-btn').addEventListener('click', () => {
-            this.refreshCookies();
+        document.getElementById('link-auto-sync').addEventListener('change', () => {
+            this.updateCreateLinkButton();
         });
 
-        document.getElementById('check-health-btn').addEventListener('click', () => {
-            this.checkCookieHealth();
+        document.getElementById('link-spotify-playlist').addEventListener('change', () => {
+            this.updateCreateLinkButton();
         });
 
-        document.getElementById('clear-notifications-btn').addEventListener('click', () => {
-            this.clearNotifications();
+        document.getElementById('link-youtube-playlist').addEventListener('change', () => {
+            this.updateCreateLinkButton();
         });
 
-        // Initialize cookie monitor status
-        this.updateCookieMonitorStatus();
+        document.getElementById('create-link-btn').addEventListener('click', () => {
+            this.createPlaylistLink();
+        });
+
+        document.getElementById('refresh-links-btn').addEventListener('click', () => {
+            this.loadExistingLinks();
+        });
+
+        document.getElementById('sync-all-links-btn').addEventListener('click', () => {
+            this.syncAllLinks();
+        });
+
+        document.getElementById('view-all-history-btn').addEventListener('click', () => {
+            this.viewAllHistory();
+        });
         
-        // Set up periodic status updates every 30 seconds
-        setInterval(() => {
-            this.updateCookieMonitorStatus();
-        }, 30000);
         }
 
     checkUrlParams() {
@@ -129,29 +145,16 @@ class SpotisyncApp {
                 console.error('Error checking Spotify auth:', error);
                 document.getElementById('spotify-status').textContent = 'Error';
                 document.getElementById('spotify-status').className = 'status-indicator status-error';
-                spotifyResponse = { ok: false };
-            }            // Check YouTube Music authentication (cookie-based)
+                spotifyResponse = { ok: false };            }
+            
+            // Check YouTube Music authentication (automatically configured)
             let youtubeResponse;
             try {
                 youtubeResponse = await fetch('/api/youtube/playlists');
-                if (youtubeResponse.ok) {
-                    document.getElementById('youtube-status').textContent = 'Connected (Cookie Auth)';
-                    document.getElementById('youtube-status').className = 'status-indicator status-connected';
-                    document.getElementById('youtube-auth-btn').textContent = 'Refresh Cookies';
-                    document.getElementById('youtube-auth-btn').className = 'btn btn-secondary';
-                } else {
-                    document.getElementById('youtube-status').textContent = 'Check Cookie Auth';
-                    document.getElementById('youtube-status').className = 'status-indicator status-warning';
-                    document.getElementById('youtube-auth-btn').textContent = 'Cookie Setup Info';
-                    document.getElementById('youtube-auth-btn').className = 'btn btn-youtube';
-                }
+                // YouTube status is handled automatically via cookie authentication
             } catch (error) {
                 console.error('Error checking YouTube auth:', error);
-                document.getElementById('youtube-status').textContent = 'Check Cookie Auth';
-                document.getElementById('youtube-status').className = 'status-indicator status-warning';
                 youtubeResponse = { ok: false };
-                document.getElementById('youtube-auth-btn').textContent = 'Cookie Setup Info';
-                document.getElementById('youtube-auth-btn').className = 'btn btn-youtube';
             }
 
             // Load playlists and show playlist section if both services are connected
@@ -172,107 +175,7 @@ class SpotisyncApp {
 
     authenticateSpotify() {
         window.location.href = '/auth/spotify';
-    }
-
-    showYoutubeCookieInfo() {
-        this.showModal('YouTube Music Authentication', `
-            <div class="cookie-auth-info">
-                <p>YouTube Music uses cookie-based authentication.</p>
-                <p><strong>If you're getting authentication errors:</strong></p>
-                <ol>
-                    <li>Open YouTube Music in your browser and log in</li>
-                    <li>Open Developer Tools (F12)</li>
-                    <li>Go to Application → Cookies → https://music.youtube.com</li>
-                    <li>Copy all cookies or use a cookie export extension</li>
-                    <li>Paste the cookie string below to refresh authentication</li>
-                </ol>
-                
-                <div class="cookie-input-section">
-                    <label for="cookie-string">Cookie String:</label>
-                    <textarea id="cookie-string" placeholder="Paste your cookie string here..." rows="4"></textarea>
-                    <button id="refresh-cookies-btn" class="action-btn">Refresh Authentication</button>
-                </div>
-                
-                <div class="auth-status">
-                    <p>Current YouTube Music Status: <span id="yt-auth-status">Checking...</span></p>
-                </div>
-            </div>
-        `);
-        
-        // Check current auth status
-        this.updateYouTubeAuthStatus();
-        
-        // Setup cookie refresh handler
-        document.getElementById('refresh-cookies-btn').addEventListener('click', () => {
-            this.refreshYouTubeCookies();
-        });
-    }
-
-    async updateYouTubeAuthStatus() {
-        try {
-            const response = await fetch('/api/auth/status');
-            const status = await response.json();
-            const statusElement = document.getElementById('yt-auth-status');
-            
-            if (statusElement) {
-                if (status.youtube?.authenticated) {
-                    statusElement.textContent = '✅ Authenticated';
-                    statusElement.style.color = 'green';
-                } else {
-                    statusElement.textContent = '❌ Not Authenticated';
-                    statusElement.style.color = 'red';
-                }
-            }
-        } catch (error) {
-            console.error('Error checking auth status:', error);
-            const statusElement = document.getElementById('yt-auth-status');
-            if (statusElement) {
-                statusElement.textContent = '❓ Status Unknown';
-                statusElement.style.color = 'orange';
-            }
-        }
-    }
-
-    async refreshYouTubeCookies() {
-        const cookieString = document.getElementById('cookie-string').value.trim();
-        
-        if (!cookieString) {
-            this.showToast('Please paste a cookie string first', 'error');
-            return;
-        }
-        
-        this.showLoading('Refreshing YouTube Music authentication...');
-        
-        try {
-            const response = await fetch('/api/youtube/refresh-auth', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ cookieString })
-            });
-
-            const result = await response.json();
-            
-            if (response.ok && result.success) {
-                this.showToast('YouTube Music authentication refreshed successfully!', 'success');
-                this.updateYouTubeAuthStatus();
-                document.getElementById('cookie-string').value = ''; // Clear the input
-                
-                // Refresh the playlists
-                await this.loadPlaylists();
-            } else {
-                this.showToast(`Error: ${result.error || 'Failed to refresh authentication'}`, 'error');
-            }
-        } catch (error) {
-            console.error('Error refreshing cookies:', error);
-            this.showToast('Failed to refresh authentication', 'error');
-        } finally {
-            this.hideLoading();
-        }
-    }
-
-    async loadPlaylists() {
+    }    async loadPlaylists() {
         try {
             this.showLoading('Loading playlists...');
 
@@ -1387,14 +1290,15 @@ class SpotisyncApp {
             pane.classList.remove('active');
         });
         document.getElementById(`${tabName}-tab`).classList.add('active');
-    }
-
-    showSection(sectionId) {
+    }    showSection(sectionId) {
         document.querySelectorAll('.card').forEach(card => {
-            card.style.display = 'none';
+            // Always keep auth section visible, hide only other sections
+            if (card.id !== 'auth-section') {
+                card.style.display = 'none';
+            }
         });
         document.getElementById(sectionId).style.display = 'block';
-    }    showLoading(message) {
+    }showLoading(message) {
         const loadingOverlay = document.getElementById('loading-overlay');
         const loadingContent = loadingOverlay.querySelector('.loading-content');
         
@@ -1917,7 +1821,549 @@ class SpotisyncApp {
         } catch (error) {
             console.error('Error clearing notifications:', error);
             this.showToast('Failed to clear notifications', 'error');
+        }    }
+
+    // Navigation Methods
+    switchToOneTimeSync() {
+        // Update navigation tabs
+        document.getElementById('one-time-sync-tab').classList.add('active');
+        document.getElementById('playlist-links-tab').classList.remove('active');
+        
+        // Show one-time sync sections, hide playlist linking
+        document.getElementById('playlist-linking-section').style.display = 'none';
+        
+        // Ensure auth section is always visible
+        document.getElementById('auth-section').style.display = 'block';
+        
+        // Show the appropriate section based on current state
+        if (this.currentPreview) {
+            this.showSection('preview-section');
+        } else {
+            this.showSection('playlist-section');
         }
+    }
+
+    switchToPlaylistLinks() {
+        // Update navigation tabs
+        document.getElementById('playlist-links-tab').classList.add('active');
+        document.getElementById('one-time-sync-tab').classList.remove('active');
+        
+        // Hide all one-time sync sections
+        document.querySelectorAll('.card').forEach(card => {
+            if (card.id !== 'auth-section' && card.id !== 'playlist-linking-section') {
+                card.style.display = 'none';
+            }
+        });
+        
+        // Ensure auth section is always visible
+        document.getElementById('auth-section').style.display = 'block';
+        
+        // Show playlist linking section
+        document.getElementById('playlist-linking-section').style.display = 'block';
+        
+        // Load playlist linking data
+        this.initializePlaylistLinks();
+    }
+
+    // Playlist Linking Methods
+    async initializePlaylistLinks() {
+        try {
+            // Load playlists for link creation
+            await this.loadPlaylistsForLinking();
+            
+            // Load existing links
+            await this.loadExistingLinks();
+            
+            // Load statistics
+            await this.loadLinkStatistics();
+            
+            // Load sync history
+            await this.loadSyncHistory();
+            
+        } catch (error) {
+            console.error('Error initializing playlist links:', error);
+            this.showToast('Failed to load playlist links data', 'error');
+        }
+    }
+
+    async loadPlaylistsForLinking() {
+        try {
+            // Load Spotify playlists
+            const spotifyResponse = await fetch('/api/spotify/playlists');
+            if (spotifyResponse.ok) {
+                const spotifyPlaylists = await spotifyResponse.json();
+                this.populateLinkingPlaylistSelect('link-spotify-playlist', spotifyPlaylists);
+            }
+
+            // Load YouTube Music playlists
+            const youtubeResponse = await fetch('/api/youtube/playlists');
+            if (youtubeResponse.ok) {
+                const youtubePlaylists = await youtubeResponse.json();
+                this.populateLinkingPlaylistSelect('link-youtube-playlist', youtubePlaylists);
+            }
+
+        } catch (error) {
+            console.error('Error loading playlists for linking:', error);
+        }
+    }
+
+    populateLinkingPlaylistSelect(selectId, playlists) {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+
+        // Clear existing options except the first one
+        const firstOption = select.options[0];
+        select.innerHTML = '';
+        select.appendChild(firstOption);
+
+        // Add playlist options
+        playlists.forEach(playlist => {
+            const option = document.createElement('option');
+            option.value = playlist.id;
+            option.textContent = playlist.name || playlist.title;
+            select.appendChild(option);
+        });
+    }
+
+    updateCreateLinkButton() {
+        const syncDirection = document.getElementById('link-sync-direction').value;
+        const spotifyPlaylist = document.getElementById('link-spotify-playlist').value;
+        const youtubePlaylist = document.getElementById('link-youtube-playlist').value;
+        const createBtn = document.getElementById('create-link-btn');
+
+        const canCreate = syncDirection && spotifyPlaylist && youtubePlaylist;
+        createBtn.disabled = !canCreate;
+    }
+
+    async createPlaylistLink() {
+        try {
+            const syncDirection = document.getElementById('link-sync-direction').value;
+            const autoSyncInterval = parseInt(document.getElementById('link-auto-sync').value);
+            const spotifyPlaylistId = document.getElementById('link-spotify-playlist').value;
+            const youtubePlaylistId = document.getElementById('link-youtube-playlist').value;
+
+            this.showLoading('Creating playlist link...');
+
+            const linkData = {
+                spotifyPlaylistId,
+                youtubePlaylistId,
+                syncDirection,
+                autoSync: autoSyncInterval > 0,
+                syncInterval: autoSyncInterval > 0 ? autoSyncInterval / (1000 * 60 * 60) : 24, // Convert to hours
+                conflictResolution: 'manual',
+                performInitialSync: false
+            };
+
+            const response = await fetch('/api/playlist-links', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(linkData)
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to create playlist link');
+            }
+
+            const newLink = await response.json();
+            this.showToast('Playlist link created successfully!', 'success');
+
+            // Reset form
+            document.getElementById('link-sync-direction').value = 'bidirectional';
+            document.getElementById('link-auto-sync').value = '86400000';
+            document.getElementById('link-spotify-playlist').value = '';
+            document.getElementById('link-youtube-playlist').value = '';
+            this.updateCreateLinkButton();
+
+            // Refresh the links display
+            await this.loadExistingLinks();
+            await this.loadLinkStatistics();
+
+        } catch (error) {
+            console.error('Error creating playlist link:', error);
+            this.showToast(error.message || 'Failed to create playlist link', 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async loadExistingLinks() {
+        try {
+            const response = await fetch('/api/playlist-links');
+            if (!response.ok) {
+                throw new Error('Failed to fetch playlist links');
+            }
+
+            const links = await response.json();
+            this.displayPlaylistLinks(links);
+
+        } catch (error) {
+            console.error('Error loading existing links:', error);
+            this.showToast('Failed to load playlist links', 'error');
+        }
+    }
+
+    displayPlaylistLinks(links) {
+        const container = document.getElementById('playlist-links-list');
+        if (!container) return;
+
+        if (links.length === 0) {
+            container.innerHTML = `
+                <div class="no-links-message">
+                    <i class="fas fa-info-circle"></i>
+                    <p>No playlist links created yet. Create your first link above to get started!</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = links.map(link => this.createLinkElement(link)).join('');
+    }
+
+    createLinkElement(link) {
+        const lastSyncText = link.lastSyncAt 
+            ? new Date(link.lastSyncAt).toLocaleString()
+            : 'Never';
+        
+        const nextSyncText = link.nextSyncAt && link.autoSync
+            ? new Date(link.nextSyncAt).toLocaleString()
+            : 'Manual';
+
+        const syncDirectionIcon = this.getSyncDirectionIcon(link.syncDirection);
+        const statusClass = link.isActive ? 'active' : 'inactive';
+
+        return `
+            <div class="link-card ${statusClass}" data-link-id="${link.id}">
+                <div class="link-header">
+                    <div class="link-title">
+                        <span class="playlist-name">${link.spotifyPlaylistName}</span>
+                        <span class="sync-direction">${syncDirectionIcon}</span>
+                        <span class="playlist-name">${link.youtubePlaylistName}</span>
+                    </div>
+                    <div class="link-status">
+                        <span class="status-badge ${statusClass}">${link.isActive ? 'Active' : 'Inactive'}</span>
+                    </div>
+                </div>
+                
+                <div class="link-details">
+                    <div class="detail-row">
+                        <span class="detail-label">Sync Mode:</span>
+                        <span class="detail-value">${this.formatSyncDirection(link.syncDirection)}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Auto Sync:</span>
+                        <span class="detail-value">${link.autoSync ? `Every ${link.syncInterval}h` : 'Manual'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Last Sync:</span>
+                        <span class="detail-value">${lastSyncText}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Next Sync:</span>
+                        <span class="detail-value">${nextSyncText}</span>
+                    </div>
+                </div>
+
+                <div class="link-stats">
+                    <div class="stat-item">
+                        <span class="stat-number">${link.stats.totalSyncs}</span>
+                        <span class="stat-label">Total</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">${link.stats.successfulSyncs}</span>
+                        <span class="stat-label">Success</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">${link.stats.failedSyncs}</span>
+                        <span class="stat-label">Failed</span>
+                    </div>
+                </div>
+
+                <div class="link-actions">
+                    <button class="btn btn-sm btn-primary" onclick="spotisyncApp.syncLink('${link.id}')">
+                        <i class="fas fa-sync"></i> Sync Now
+                    </button>
+                    <button class="btn btn-sm btn-secondary" onclick="spotisyncApp.viewLinkHistory('${link.id}')">
+                        <i class="fas fa-history"></i> History
+                    </button>
+                    <button class="btn btn-sm btn-outline" onclick="spotisyncApp.editLink('${link.id}')">
+                        <i class="fas fa-edit"></i> Edit
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="spotisyncApp.deleteLink('${link.id}')">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    getSyncDirectionIcon(direction) {
+        switch (direction) {
+            case 'spotify-to-youtube':
+                return '<i class="fas fa-arrow-right"></i>';
+            case 'youtube-to-spotify':
+                return '<i class="fas fa-arrow-left"></i>';
+            case 'bidirectional':
+                return '<i class="fas fa-exchange-alt"></i>';
+            default:
+                return '<i class="fas fa-question"></i>';
+        }
+    }
+
+    formatSyncDirection(direction) {
+        switch (direction) {
+            case 'spotify-to-youtube':
+                return 'Spotify → YouTube Music';
+            case 'youtube-to-spotify':
+                return 'YouTube Music → Spotify';
+            case 'bidirectional':
+                return 'Bidirectional';
+            default:
+                return 'Unknown';
+        }
+    }
+
+    async syncLink(linkId) {
+        try {
+            this.showLoading('Syncing playlist...');
+
+            const response = await fetch(`/api/playlist-links/${linkId}/sync`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to sync playlist');
+            }
+
+            const result = await response.json();
+            this.showToast('Playlist synced successfully!', 'success');
+
+            // Refresh the display
+            await this.loadExistingLinks();
+            await this.loadLinkStatistics();
+            await this.loadSyncHistory();
+
+        } catch (error) {
+            console.error('Error syncing playlist link:', error);
+            this.showToast(error.message || 'Failed to sync playlist', 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async syncAllLinks() {
+        try {
+            this.showLoading('Syncing all playlists...');
+
+            const linksResponse = await fetch('/api/playlist-links');
+            if (!linksResponse.ok) {
+                throw new Error('Failed to fetch playlist links');
+            }
+
+            const links = await linksResponse.json();
+            const activeLinks = links.filter(link => link.isActive);
+
+            if (activeLinks.length === 0) {
+                this.showToast('No active playlist links to sync', 'info');
+                return;
+            }
+
+            let successCount = 0;
+            let failCount = 0;
+
+            // Sync all active links
+            for (const link of activeLinks) {
+                try {
+                    const response = await fetch(`/api/playlist-links/${link.id}/sync`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if (response.ok) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
+                } catch (error) {
+                    console.error(`Error syncing link ${link.id}:`, error);
+                    failCount++;
+                }
+            }
+
+            this.showToast(`Sync completed: ${successCount} successful, ${failCount} failed`, 'info');
+
+            // Refresh the display
+            await this.loadExistingLinks();
+            await this.loadLinkStatistics();
+            await this.loadSyncHistory();
+
+        } catch (error) {
+            console.error('Error syncing all links:', error);
+            this.showToast('Failed to sync all playlists', 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async deleteLink(linkId) {
+        if (!confirm('Are you sure you want to delete this playlist link? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            this.showLoading('Deleting playlist link...');
+
+            const response = await fetch(`/api/playlist-links/${linkId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to delete playlist link');
+            }
+
+            this.showToast('Playlist link deleted successfully', 'success');
+
+            // Refresh the display
+            await this.loadExistingLinks();
+            await this.loadLinkStatistics();
+
+        } catch (error) {
+            console.error('Error deleting playlist link:', error);
+            this.showToast(error.message || 'Failed to delete playlist link', 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async editLink(linkId) {
+        // For now, show a simple alert. In the future, this could open a modal
+        this.showToast('Link editing feature coming soon!', 'info');
+    }
+
+    async viewLinkHistory(linkId) {
+        try {
+            const response = await fetch(`/api/playlist-links/${linkId}/history?limit=10`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch sync history');
+            }
+
+            const history = await response.json();
+            this.displayLinkHistoryModal(linkId, history);
+
+        } catch (error) {
+            console.error('Error loading link history:', error);
+            this.showToast('Failed to load sync history', 'error');
+        }
+    }
+
+    displayLinkHistoryModal(linkId, history) {
+        // For now, show a simple alert with history. In the future, this could be a proper modal
+        let historyText = `Sync History for Link ${linkId}:\n\n`;
+        
+        if (history.length === 0) {
+            historyText += 'No sync history available.';
+        } else {
+            history.forEach(entry => {
+                const date = new Date(entry.syncedAt).toLocaleString();
+                historyText += `${date}: ${entry.status} - ${entry.tracksProcessed} tracks processed\n`;
+            });
+        }
+
+        alert(historyText);
+    }
+
+    async loadLinkStatistics() {
+        try {
+            const response = await fetch('/api/playlist-links/stats');
+            if (!response.ok) {
+                throw new Error('Failed to fetch statistics');
+            }
+
+            const stats = await response.json();
+            this.displayLinkStatistics(stats);
+
+        } catch (error) {
+            console.error('Error loading link statistics:', error);
+        }
+    }
+
+    displayLinkStatistics(stats) {
+        document.getElementById('total-links').textContent = stats.totalLinks || 0;
+        document.getElementById('successful-syncs').textContent = stats.successfulSyncs || 0;
+        document.getElementById('failed-syncs').textContent = stats.failedSyncs || 0;
+        
+        // Calculate total tracks synced (approximate)
+        const totalTracks = stats.successfulSyncs * 10; // Rough estimate
+        document.getElementById('total-tracks-synced').textContent = totalTracks;
+    }
+
+    async loadSyncHistory() {
+        try {
+            const response = await fetch('/api/sync-history?limit=5');
+            if (!response.ok) {
+                throw new Error('Failed to fetch sync history');
+            }
+
+            const history = await response.json();
+            this.displaySyncHistory(history);
+
+        } catch (error) {
+            console.error('Error loading sync history:', error);
+        }
+    }
+
+    displaySyncHistory(history) {
+        const container = document.getElementById('sync-history-list');
+        if (!container) return;
+
+        if (history.length === 0) {
+            container.innerHTML = `
+                <div class="no-history-message">
+                    <i class="fas fa-info-circle"></i>
+                    <p>No sync history available yet.</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = history.map(entry => this.createHistoryElement(entry)).join('');
+    }
+
+    createHistoryElement(entry) {
+        const date = new Date(entry.syncedAt).toLocaleString();
+        const statusClass = entry.status === 'success' ? 'success' : 
+                           entry.status === 'failed' ? 'failed' : 'partial';
+        
+        const directionIcon = this.getSyncDirectionIcon(entry.syncDirection);
+
+        return `
+            <div class="history-item">
+                <div class="history-header">
+                    <span class="history-direction">${directionIcon}</span>
+                    <span class="history-date">${date}</span>
+                    <span class="status-badge ${statusClass}">${entry.status}</span>
+                </div>
+                <div class="history-details">
+                    <span>${entry.tracksProcessed} tracks processed</span>
+                    ${entry.tracksAdded ? `, ${entry.tracksAdded} added` : ''}
+                    ${entry.tracksFailed ? `, ${entry.tracksFailed} failed` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    async viewAllHistory() {
+        // For now, show a toast. In the future, this could open a dedicated history page
+        this.showToast('Full history view coming soon!', 'info');
     }
 }
 

@@ -1,0 +1,178 @@
+[
+  {
+    "id": "mbbio9ohxqysd1tvcu8",
+    "spotifyPlaylistId": "0AptRaNTdHxknCFGNVTV7q",
+    "spotifyPlaylistName": "Music Collection - YT",
+    "youtubePlaylistId": "PLQylNX4nWATm0A6B38A7AEPqWaBua9vl_",
+    "youtubePlaylistName": "Music Collection",
+    "syncDirection": "bidirectional",
+    "autoSync": true,
+    "syncInterval": 1,
+    "conflictResolution": "manual",
+    "lastSyncAt": null,
+    "nextSyncAt": "2025-05-31T01:51:49.121Z",
+    "createdAt": "2025-05-31T00:51:49.121Z",
+    "updatedAt": "2025-05-31T00:51:49.121Z",
+    "isActive": true,
+    "stats": {
+      "totalSyncs": 0,
+      "lastSyncTrackCount": 0,
+      "successfulSyncs": 0,
+      "failedSyncs": 0
+    }
+  },
+  {
+    "id": "mbbiovxc5gddi6706u8",
+    "spotifyPlaylistId": "0mTgSD11sg1f24J44AkTBm",
+    "spotifyPlaylistName": "CAR MUSIC - YT",
+    "youtubePlaylistId": "PLQylNX4nWATl-Jm1tA6rZG1mkxJahPaR5",
+    "youtubePlaylistName": "Car music",
+    "syncDirection": "bidirectional",
+    "autoSync": true,
+    "syncInterval": 1,
+    "conflictResolution": "manual",
+    "lastSyncAt": null,
+    "nextSyncAt": "2025-05-31T01:52:17.952Z",
+    "createdAt": "2025-05-31T00:52:17.952Z",
+    "updatedAt": "2025-05-31T00:52:17.952Z",
+    "isActive": true,
+    "stats": {
+      "totalSyncs": 0,
+      "lastSyncTrackCount": 0,
+      "successfulSyncs": 0,
+      "failedSyncs": 0
+    }
+  },
+  {
+    "id": "mbbip7c4iauep71uv5q",
+    "spotifyPlaylistId": "1uVO6eQr9cqTutui6dwwHr",
+    "spotifyPlaylistName": "Metal//Rock collection - YT",
+    "youtubePlaylistId": "PLQylNX4nWATnS797Fs8n3oAT3zwyarIDZ",
+    "youtubePlaylistName": "Metal//Rock Collection",
+    "syncDirection": "bidirectional",
+    "autoSync": true,
+    "syncInterval": 1,
+    "conflictResolution": "manual",
+    "lastSyncAt": null,
+    "nextSyncAt": "2025-05-31T01:52:32.741Z",
+    "createdAt": "2025-05-31T00:52:32.740Z",
+    "updatedAt": "2025-05-31T00:52:32.740Z",
+    "isActive": true,
+    "stats": {
+      "totalSyncs": 0,
+      "lastSyncTrackCount": 0,
+      "successfulSyncs": 0,
+      "failedSyncs": 0
+    }
+  },
+  {
+    "id": "mbbipoeya85dx3jt0cr",
+    "spotifyPlaylistId": "27WpS4yelVbBnJpt6NFNj6",
+    "spotifyPlaylistName": "Rap Collection - YT",
+    "youtubePlaylistId": "PLQylNX4nWATlU6RvBw67gqlioqbyKOQm8",
+    "youtubePlaylistName": "Rap Collection",
+    "syncDirection": "bidirectional",
+    "autoSync": true,
+    "syncInterval": 1,
+    "conflictResolution": "manual",
+    "lastSyncAt": null,
+    "nextSyncAt": "2025-05-31T01:52:54.874Z",
+    "createdAt": "2025-05-31T00:52:54.874Z",
+    "updatedAt": "2025-05-31T00:52:54.874Z",
+    "isActive": true,
+    "stats": {
+      "totalSyncs": 0,
+      "lastSyncTrackCount": 0,
+      "successfulSyncs": 0,
+      "failedSyncs": 0
+    }
+  },
+  {
+    "id": "mbbiq1u3uyxj57gc89a",
+    "spotifyPlaylistId": "780v6G85xDjDlFxsUrcwtr",
+    "spotifyPlaylistName": "Victorius Collection",
+    "youtubePlaylistId": "PLQylNX4nWATmDkFov5du6QZUbauNvDnAI",
+    "youtubePlaylistName": "Victorius Collection",
+    "syncDirection": "bidirectional",
+    "autoSync": true,
+    "syncInterval": 1,
+    "conflictResolution": "manual",
+    "lastSyncAt": "2025-05-31T01:00:16.697Z",
+    "nextSyncAt": "2025-05-31T02:00:16.700Z",
+    "createdAt": "2025-05-31T00:53:12.267Z",
+    "updatedAt": "2025-05-31T01:00:16.700Z",
+    "isActive": true,
+    "stats": {
+      "totalSyncs": 1,
+      "lastSyncTrackCount": 0,
+      "successfulSyncs": 0,
+      "failedSyncs": 1
+    }
+  },
+  {
+    "id": "mbbiq8p8484e9p8k0bb",
+    "spotifyPlaylistId": "2JEPFL1YCjVHhLBLRi060c",
+    "spotifyPlaylistName": "Beast in Black Collection",
+    "youtubePlaylistId": "PLQylNX4nWATn6cSck73tcWDabEcXGiVpH",
+    "youtubePlaylistName": "Beast in Black Collection",
+    "syncDirection": "bidirectional",
+    "autoSync": true,
+    "syncInterval": 1,
+    "conflictResolution": "manual",
+    "lastSyncAt": "2025-05-31T01:00:16.733Z",
+    "nextSyncAt": "2025-05-31T02:00:16.733Z",
+    "createdAt": "2025-05-31T00:53:21.164Z",
+    "updatedAt": "2025-05-31T01:00:16.733Z",
+    "isActive": true,
+    "stats": {
+      "totalSyncs": 1,
+      "lastSyncTrackCount": 0,
+      "successfulSyncs": 0,
+      "failedSyncs": 1
+    }
+  },
+  {
+    "id": "mbbiqh7riixvxrz82zr",
+    "spotifyPlaylistId": "3Cs4BX8LsvyKRqGYmyFRmY",
+    "spotifyPlaylistName": "Gloriously Angus Collection",
+    "youtubePlaylistId": "PLQylNX4nWATlCg4eQU4uxghmvgDBFdlrg",
+    "youtubePlaylistName": "Gloriously Angus Collection",
+    "syncDirection": "bidirectional",
+    "autoSync": true,
+    "syncInterval": 24,
+    "conflictResolution": "manual",
+    "lastSyncAt": "2025-05-31T01:00:16.764Z",
+    "nextSyncAt": "2025-06-01T01:00:16.764Z",
+    "createdAt": "2025-05-31T00:53:32.199Z",
+    "updatedAt": "2025-05-31T01:00:16.764Z",
+    "isActive": true,
+    "stats": {
+      "totalSyncs": 1,
+      "lastSyncTrackCount": 0,
+      "successfulSyncs": 0,
+      "failedSyncs": 1
+    }
+  },
+  {
+    "id": "mbbir55lugqjsb19c3a",
+    "spotifyPlaylistId": "0w7C2286wGbDn86PuafBSM",
+    "spotifyPlaylistName": "The Sponge crew cooked",
+    "youtubePlaylistId": "PLQylNX4nWATnMnzHsS8GSMaWnPisSSFL2",
+    "youtubePlaylistName": "The Sponge crew cooked",
+    "syncDirection": "bidirectional",
+    "autoSync": true,
+    "syncInterval": 1,
+    "conflictResolution": "manual",
+    "lastSyncAt": "2025-05-31T01:06:42.698Z",
+    "nextSyncAt": "2025-05-31T02:06:42.698Z",
+    "createdAt": "2025-05-31T00:54:03.225Z",
+    "updatedAt": "2025-05-31T01:06:42.698Z",
+    "isActive": true,
+    "stats": {
+      "totalSyncs": 5,
+      "lastSyncTrackCount": 1,
+      "successfulSyncs": 4,
+      "failedSyncs": 1
+    }
+  }
+]
